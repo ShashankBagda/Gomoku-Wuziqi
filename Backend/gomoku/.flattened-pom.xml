@@ -17,6 +17,8 @@
     <module>gomoku-room</module>
     <module>gomoku-matching</module>
     <module>gomoku-controller</module>
+    <module>gomoku-controller-match</module>
+    <module>gomoku-controller-room</module>
     <module>gomoku-api</module>
   </modules>
   <dependencies>
