@@ -1,0 +1,74 @@
+@startuml UC4 - Start Matching (Casual Mode)
+
+title UC4: Start Matching - Casual Mode
+
+actor Player1
+actor Player2
+participant MatchController
+participant MatchBizService
+participant MatchService
+participant MatchQueue
+participant GameRoomMapper
+participant GameRepository
+database MySQL
+database MongoDB
+
+Player1 -> MatchController: POST /match/start\n(mode: casual)
+activate MatchController
+MatchController -> MatchBizService: matchAndSave(request, player1Id)
+activate MatchBizService
+
+MatchBizService -> MatchService: match(player1Id, CASUAL)
+activate MatchService
+MatchService -> MatchQueue: addPlayer(player1, CASUAL)
+activate MatchQueue
+MatchQueue -> MatchQueue: tryMatch()
+
+alt no match found
+  MatchQueue --> Player1: 202 Accepted (in queue)
+  deactivate MatchQueue
+  deactivate MatchService
+  deactivate MatchBizService
+  deactivate MatchController
+end
+
+Player2 -> MatchController: POST /match/start\n(mode: casual)
+activate MatchController
+MatchController -> MatchBizService: matchAndSave(request, player2Id)
+activate MatchBizService
+MatchBizService -> MatchService: match(player2Id, CASUAL)
+activate MatchService
+MatchService -> MatchQueue: addPlayer(player2, CASUAL)
+activate MatchQueue
+MatchQueue -> MatchQueue: tryMatch()
+
+alt match found
+  MatchQueue --> MatchService: MatchResult(player1, player2)
+  deactivate MatchQueue
+  MatchService --> MatchBizService: MatchResult
+  deactivate MatchService
+
+  MatchBizService -> GameRoomMapper: insert(GameRoom)
+  activate GameRoomMapper
+  GameRoomMapper -> MySQL: INSERT game_room
+  activate MySQL
+  MySQL --> GameRoomMapper: roomId
+  deactivate MySQL
+  deactivate GameRoomMapper
+
+  MatchBizService -> GameRepository: save(Game with empty state)
+  activate GameRepository
+  GameRepository -> MongoDB: INSERT game document
+  activate MongoDB
+  MongoDB --> GameRepository: success
+  deactivate MongoDB
+  deactivate GameRepository
+
+  MatchBizService --> Player1: 200 OK\n(roomId, matched)
+  deactivate MatchBizService
+  deactivate MatchController
+
+  MatchBizService --> Player2: 200 OK\n(roomId, matched)
+end
+
+@enduml

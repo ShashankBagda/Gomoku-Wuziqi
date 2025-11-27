@@ -1,0 +1,361 @@
+@startuml AI Practice - Sequence Diagram
+!define RECTANGLE class
+
+skinparam {
+    backgroundColor white
+    shadowing false
+    defaultFontName Arial
+    defaultFontSize 11
+}
+
+skinparam participant {
+    BackgroundColor<<UI>> #E3F2FD
+    BackgroundColor<<Component>> #FFF3E0
+    BackgroundColor<<Service>> #E8F5E9
+    BackgroundColor<<Controller>> #F3E5F5
+    BackgroundColor<<External>> #FFEBEE
+    BorderColor Black
+}
+
+skinparam sequence {
+    ArrowColor #424242
+    LifeLineBorderColor #424242
+    LifeLineBackgroundColor #FFFFFF
+    ParticipantBorderColor #424242
+}
+
+' ==================== ACTORS & PARTICIPANTS ====================
+actor "Player" as player <<UI>>
+participant "Practice.jsx" as ui <<Component>>
+participant "AiApi" as api <<Service>>
+participant "GptAiController" as controller <<Controller>>
+participant "HeuristicEvaluator" as heuristic <<Service>>
+participant "MoveValidator" as validator <<Service>>
+participant "OpenAI API" as gpt <<External>>
+
+' ==================== GAME INITIALIZATION ====================
+group Game Initialization
+    player -> ui : Click "Practice vs AI"
+    activate ui
+    ui -> ui : resetGame()
+    note right
+        Initialize state:
+        - Empty 15x15 board
+        - Turn = "black"
+        - humanColor = "black"
+        - k = 10, style = "BALANCE"
+    end note
+    ui --> player : Display empty board
+    deactivate ui
+end
+
+|||
+
+' ==================== HUMAN MOVE ====================
+group Human Move
+    player -> ui : Click cell (r, c)
+    activate ui
+    ui -> ui : handleClick(r, c)
+
+    alt Move is invalid (busy or game over or not player's turn)
+        ui --> player : No action
+    else Move is valid
+        ui -> ui : Update board[r][c] = humanColor
+        ui -> ui : historyRef.push({row, col, color})
+        ui -> ui : placeSound()
+
+        ui -> ui : checkWinner(board)
+
+        alt Human wins
+            ui -> ui : setWinnerCode(1 or 2)
+            ui -> ui : outcomeSound(winner)
+            ui --> player : Display "You win!"
+        else Game continues
+            ui -> ui : setTurn(opposite color)
+            ui -> ui : setBusy(true)
+            ui --> player : Display "AI thinking..."
+        end
+    end
+    deactivate ui
+end
+
+|||
+
+' ==================== AI MOVE REQUEST ====================
+group AI Move Calculation
+    ui -> api : getGptMove(board, next, {k, style})
+    activate api
+
+    note right of api
+        board: 15x15 int array
+        next: "WHITE" or "BLACK"
+        opts: {k: 10, style: "BALANCE"}
+    end note
+
+    api -> controller : POST /api/gomoku/ai/gpt-move
+    activate controller
+
+    ' ==================== STEP 1: IMMEDIATE WIN ====================
+    controller -> validator : findImmediateWin(board, me)
+    activate validator
+
+    loop For each empty cell (r, c)
+        validator -> validator : Simulate placing stone
+        validator -> validator : isFive(board, r, c, me)
+
+        alt Five in a row found
+            validator --> controller : return AiMove{x, y}
+            note left
+                <b>Priority 1:</b>
+                Win immediately
+            end note
+            controller --> api : ApiResult.success(winMove)
+            api --> ui : {x, y}
+            api -> ui : [Return early, skip remaining steps]
+        end
+    end
+    validator --> controller : null (no immediate win)
+    deactivate validator
+
+    |||
+
+    ' ==================== STEP 2: BLOCK OPPONENT ====================
+    controller -> validator : findImmediateWin(board, opponent)
+    activate validator
+
+    loop For each empty cell
+        validator -> validator : Simulate opponent stone
+        validator -> validator : isFive(board, r, c, opponent)
+
+        alt Opponent can win next turn
+            validator --> controller : return AiMove{x, y}
+            note left
+                <b>Priority 2:</b>
+                Block opponent win
+            end note
+            controller --> api : ApiResult.success(blockMove)
+            api --> ui : {x, y}
+            api -> ui : [Return early]
+        end
+    end
+    validator --> controller : null (no immediate threat)
+    deactivate validator
+
+    |||
+
+    ' ==================== STEP 3: HEURISTIC SCORING ====================
+    controller -> heuristic : topCandidates(board, me, k, style)
+    activate heuristic
+
+    note right of heuristic
+        <b>Heuristic Evaluation:</b>
+        Score all empty positions based on:
+        • Pattern detection (5/4/3/2 in row)
+        • Open ends vs blocked ends
+        • Attack weight vs defense weight
+    end note
+
+    loop For each empty cell (r, c)
+        heuristic -> heuristic : scoreMove(board, r, c, me)
+        note right
+            Pattern scoring:
+            • 5-in-row: 1,000,000
+            • Open-4: 100,000
+            • Half-open-4: 20,000
+            • Open-3: 5,000
+            • Open-2: 120
+        end note
+
+        heuristic -> heuristic : scoreMove(board, r, c, opponent)
+
+        heuristic -> heuristic : totalScore = style.combine(myScore, oppScore)
+        note right
+            Style weights:
+            • OFFENSE: 3×attack + 1×defense
+            • BALANCE: 2×attack + 2×defense
+            • DEFENSE: 2×attack + 3×defense
+        end note
+    end
+
+    heuristic -> heuristic : Sort by score descending
+    heuristic -> heuristic : Take top K candidates
+
+    heuristic --> controller : List<ScoredMove> (top K)
+    deactivate heuristic
+
+    |||
+
+    ' ==================== STEP 4: GPT SELECTION ====================
+    controller -> controller : chooseWithGpt(board, next, topCandidates)
+
+    controller -> controller : Prepare payload
+    note right
+        {
+          "model": "gpt-4o-mini",
+          "temperature": 0.1,
+          "response_format": {"type": "json_object"},
+          "messages": [
+            {
+              "role": "system",
+              "content": "You are a Gomoku AI..."
+            },
+            {
+              "role": "user",
+              "content": "next=WHITE; board=0000...; candidates=[{x,y,score}...]"
+            }
+          ]
+        }
+    end note
+
+    controller -> gpt : POST /v1/chat/completions
+    activate gpt
+
+    alt GPT succeeds (HTTP 2xx)
+        gpt --> controller : {"choices": [{"message": {"content": "{x:7,y:8}"}}]}
+        controller -> controller : Parse JSON response
+        controller -> controller : Extract AiMove{x, y}
+
+        controller -> controller : isLegalMove(board, aiMove)
+
+        alt Move is legal
+            controller --> api : ApiResult.success(gptMove)
+            note left
+                <b>Priority 3:</b>
+                GPT-selected move
+                from top K candidates
+            end note
+        else Move is illegal
+            controller --> api : ApiResult.success(topCandidates[0])
+            note left
+                <b>Fallback 1:</b>
+                Best heuristic candidate
+            end note
+        end
+    else GPT fails (timeout/error/invalid)
+        gpt --> controller : Error or invalid response
+        controller --> api : ApiResult.success(topCandidates[0])
+        note left
+            <b>Fallback 2:</b>
+            Best heuristic candidate
+        end note
+    end
+    deactivate gpt
+
+    deactivate controller
+
+    |||
+
+    ' ==================== FINAL FALLBACK ====================
+    alt No candidates available
+        controller -> controller : heuristicMove(board, next)
+        note right
+            <b>Fallback 3:</b>
+            Simple greedy evaluation
+            of all positions
+        end note
+        controller --> api : ApiResult.success(fallbackMove)
+    end
+
+    api --> ui : {x, y}
+    deactivate api
+end
+
+|||
+
+' ==================== AI MOVE APPLICATION ====================
+group Apply AI Move
+    activate ui
+    ui -> ui : Validate AI response
+
+    alt AI move is valid
+        ui -> ui : Update board[x][y] = aiColor
+        ui -> ui : historyRef.push({row: x, col: y, color: aiColor})
+        ui -> ui : setLastAiMove({x, y})
+        ui -> ui : placeSound()
+
+        note right
+            Visual feedback:
+            - Highlight AI move with animation
+            - Auto-remove highlight after 1.4s
+        end note
+
+        ui -> ui : checkWinner(board)
+
+        alt AI wins
+            ui -> ui : setWinnerCode(1 or 2)
+            ui -> ui : outcomeSound(winner)
+            ui --> player : Display "AI wins!"
+        else Game continues
+            ui -> ui : setTurn(humanColor)
+            ui -> ui : setBusy(false)
+            ui --> player : Display "Your turn"
+        end
+    else AI move invalid
+        ui -> ui : setError("AI move failed")
+        ui -> ui : setTurn(humanColor)
+        ui -> ui : setBusy(false)
+        ui --> player : Display error + keep turn
+    end
+    deactivate ui
+end
+
+|||
+
+' ==================== GAME SETTLEMENT ====================
+group Match Settlement (Background)
+    alt Game is over && User is authenticated
+        ui -> ui : useEffect (winnerCode changed)
+        activate ui
+
+        note right
+            Settlement data:
+            - matchId: "ai-{userId}-{timestamp}"
+            - winnerId: player ID if player won, else null
+            - loserId: player ID if player lost, else null
+            - modeType: "CASUAL"
+        end note
+
+        ui -> api : rankingApi.settleMatch(settlementData)
+        activate api
+
+        api -> controller : POST /api/ranking/settle
+        note right
+            Update player statistics:
+            - Win/Loss count
+            - Rating points
+            - Match history
+        end note
+
+        controller --> api : Success
+        api --> ui : Settled (non-blocking)
+        deactivate api
+        deactivate ui
+    end
+end
+
+|||
+
+' ==================== UNDO OPERATION ====================
+group Undo Last Moves
+    player -> ui : Click "Undo"
+    activate ui
+
+    ui -> ui : handleUndo()
+
+    alt History has >= 2 moves
+        ui -> ui : Pop last move (AI)
+        ui -> ui : Clear board[lastMove.row][lastMove.col]
+
+        ui -> ui : Pop previous move (Player)
+        ui -> ui : Clear board[prevMove.row][prevMove.col]
+
+        ui -> ui : setWinnerCode(-1)
+        ui -> ui : setTurn(humanColor)
+        ui --> player : Display board with 2 moves removed
+    else Not enough history
+        ui --> player : Button disabled
+    end
+    deactivate ui
+end
+
+@enduml

@@ -1,0 +1,82 @@
+@startuml UC1/UC2 - Create & Join Private Room
+
+title UC1/UC2: Create & Join Private Room
+
+actor Player1
+actor Player2
+participant RoomController
+participant RoomBizService
+participant RoomService
+participant GameRoomMapper
+participant GameRepository
+database MySQL
+database MongoDB
+
+== Player1 Creates Room ==
+
+Player1 -> RoomController: POST /room/create
+activate RoomController
+RoomController -> RoomBizService: createRoom(player1Id)
+activate RoomBizService
+
+RoomBizService -> RoomService: createRoom(player1Id)
+activate RoomService
+RoomService -> RoomService: generateRoomCode()
+
+RoomService -> GameRoomMapper: insert(GameRoom)
+activate GameRoomMapper
+GameRoomMapper -> MySQL: INSERT game_room
+activate MySQL
+MySQL --> GameRoomMapper: roomId
+deactivate MySQL
+deactivate GameRoomMapper
+
+RoomService --> RoomBizService: RoomInfo
+deactivate RoomService
+RoomBizService --> RoomController: CreateRoomResponse
+deactivate RoomBizService
+RoomController --> Player1: 200 OK (roomCode: "ABC123")
+deactivate RoomController
+
+== Player2 Joins Room ==
+
+Player2 -> RoomController: POST /room/join\n(roomCode: "ABC123")
+activate RoomController
+RoomController -> RoomBizService: joinRoom(request, player2Id)
+activate RoomBizService
+
+RoomBizService -> RoomService: joinRoom("ABC123", player2Id)
+activate RoomService
+
+RoomService -> GameRoomMapper: selectByRoomCode("ABC123")
+activate GameRoomMapper
+GameRoomMapper -> MySQL: SELECT game_room\nWHERE room_code = 'ABC123'
+activate MySQL
+MySQL --> GameRoomMapper: GameRoom
+deactivate MySQL
+deactivate GameRoomMapper
+
+RoomService -> GameRoomMapper: update(set player2Id)
+activate GameRoomMapper
+GameRoomMapper -> MySQL: UPDATE game_room\nSET player2_id = ?
+activate MySQL
+MySQL --> GameRoomMapper: success
+deactivate MySQL
+deactivate GameRoomMapper
+
+RoomService -> GameRepository: save(Game with empty state)
+activate GameRepository
+GameRepository -> MongoDB: INSERT game document
+activate MongoDB
+MongoDB --> GameRepository: success
+deactivate MongoDB
+deactivate GameRepository
+
+RoomService --> RoomBizService: JoinResult
+deactivate RoomService
+RoomBizService --> RoomController: JoinRoomResponse
+deactivate RoomBizService
+RoomController --> Player2: 200 OK (roomId, joined)
+deactivate RoomController
+
+@enduml

@@ -1,0 +1,146 @@
+@startuml User Service Class Diagram
+
+package "user-controller" {
+  class UserLoginController {
+    - userLoginBizService: IUserLoginBizService
+    + publicKey(): ApiResult<String>
+    + register(request): ApiResult<UserRegisterResponse>
+    + login(request): ApiResult<UserLoginResponse>
+    + verify(token): ApiResult<UserVerifyResponse>
+    + resetPassword(request): ApiResult<Void>
+    + logout(userId): ApiResult<Void>
+  }
+
+  class EmailVerificationController {
+    - emailService: IEmailService
+    + sendVerificationCode(request): ApiResult<String>
+  }
+
+  class UserInfoController {
+    - userInfoService: IUserInfoService
+    + getUserInfo(userId): ApiResult<UserInfoResponse>
+  }
+}
+
+package "user-biz" {
+  interface IUserLoginBizService {
+    + publicKey(): String
+    + register(request): UserRegisterResponse
+    + login(request): UserLoginResponse
+    + verify(token): UserVerifyResponse
+    + resetPassword(request): UserResetPasswordResponse
+    + logout(userId): void
+  }
+
+  class UserLoginBizServiceImpl implements IUserLoginBizService {
+    - rsaSecurityService: IRsaSecurityService
+    - passwordHashService: IPasswordHashService
+    - userService: IUserService
+    - jwtTokenService: IJwtTokenService
+    - userTokenService: IUserTokenService
+    - emailService: IEmailService
+  }
+
+  interface IUserValidationBizService {
+    + validateEmailUniqueness(email): boolean
+    + validateAccountStatus(username): boolean
+  }
+
+  interface IUserInfoService {
+    + getUserInfo(userId): UserInfoResponse
+  }
+}
+
+package "user-dao" {
+  interface IUserService {
+    + save(user): Long
+    + findByEmail(email): UserDTO
+    + findById(id): UserDTO
+    + update(user): int
+  }
+
+  interface IUserTokenService {
+    + saveOrUpdate(token): int
+    + findByUserId(userId): UserTokenDTO
+    + deleteByUserId(userId): int
+  }
+
+  class User {
+    - id: Long
+    - email: String
+    - nickname: String
+    - passwordHash: String
+    - passwordSalt: String
+    - avatarUrl: String
+    - status: Byte
+  }
+
+  class UserToken {
+    - id: Long
+    - userId: Long
+    - refreshToken: String
+    - expiresAt: LocalDateTime
+  }
+}
+
+package "user-security" {
+  interface IRsaSecurityService {
+    + publicKey(): String
+    + decrypt(encrypted): String
+  }
+
+  interface IPasswordHashService {
+    + generateSalt(): String
+    + hashPassword(password, salt): String
+    + verifyPassword(password, hash, salt): boolean
+    + decryptPassword(encrypted): String
+  }
+
+  interface IJwtTokenService {
+    + generateToken(userId, email, nickname, refreshToken): String
+    + verifyToken(token, refreshToken): Long
+    + extractUserId(token): Long
+  }
+
+  interface IEmailService {
+    + sendVerificationCode(email): void
+    + verifyCode(email, code): boolean
+  }
+}
+
+package "user-api" {
+  class UserLoginRequest {
+    - username: String
+    - encryptedPassword: String
+  }
+
+  class UserRegisterRequest {
+    - email: String
+    - nickname: String
+    - encryptedPassword: String
+    - verificationCode: String
+  }
+
+  class UserLoginResponse {
+    - userId: Long
+    - email: String
+    - token: String
+  }
+}
+
+UserLoginController --> IUserLoginBizService
+UserLoginController --> UserLoginRequest
+UserLoginController --> UserRegisterRequest
+UserLoginController --> UserLoginResponse
+
+UserLoginBizServiceImpl --> IUserService
+UserLoginBizServiceImpl --> IUserTokenService
+UserLoginBizServiceImpl --> IRsaSecurityService
+UserLoginBizServiceImpl --> IPasswordHashService
+UserLoginBizServiceImpl --> IJwtTokenService
+UserLoginBizServiceImpl --> IEmailService
+
+IUserService --> User
+IUserTokenService --> UserToken
+
+@enduml

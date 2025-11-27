@@ -1,0 +1,67 @@
+@startuml DDD Context Map - Gomoku User Domain
+
+'Context Map showing bounded contexts and their relationships
+
+skinparam rectangle {
+  BackgroundColor<<core>> LightBlue
+  BackgroundColor<<supporting>> LightGreen
+  BackgroundColor<<generic>> LightGray
+  BackgroundColor<<external>> LightYellow
+  BorderColor Black
+  FontSize 12
+}
+
+package "Gomoku System Context" {
+
+  rectangle "User Identity & Access\nBounded Context" <<core>> as UserContext {
+    rectangle "Identity Management\nSubdomain" as Identity #LightCyan {
+      card "User Registration" as UC1
+      card "User Profile" as UC8
+    }
+
+    rectangle "Authentication\nSubdomain" as Auth #LightCyan {
+      card "Login/Logout" as UC2_UC5
+      card "Token Verification" as UC3
+      card "Password Management" as UC4
+    }
+
+    rectangle "Security\nSubdomain" as Security #LightCyan {
+      card "Encryption (RSA)" as UC6
+      card "Email Verification" as UC7
+    }
+  }
+
+  rectangle "Game Management\nBounded Context" <<core>> as GameContext {
+    note right
+      Player matching
+      Game rooms
+      Game logic
+    end note
+  }
+
+  rectangle "Email Notification\nBounded Context" <<supporting>> as EmailContext {
+    card "Send Verification Code"
+    card "Verify Code"
+  }
+
+  rectangle "Persistence\nBounded Context" <<generic>> as PersistenceContext {
+    database "User Database" as UserDB
+    database "Token Database" as TokenDB
+  }
+
+}
+
+package "External Systems" {
+  rectangle "Email Service Provider\n(SMTP)" <<external>> as EmailProvider
+  rectangle "Client Applications\n(Web/Mobile)" <<external>> as ClientApp
+}
+
+' Relationships between bounded contexts
+UserContext --> EmailContext : ACL\n[Anti-Corruption Layer]\nUses for verification
+UserContext --> PersistenceContext : OHS\n[Open Host Service]\nStores user data
+GameContext ..> UserContext : CF\n[Conformist]\nDepends on user identity
+
+EmailContext --> EmailProvider : ACL\nIntegration via SMTP
+
+ClientApp ..> UserContext : U/D\n[Upstream/Downstream]\nConsumes user APIs
+@enduml

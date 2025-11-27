@@ -1,0 +1,140 @@
+@startuml UC16 - AI Practice Mode
+
+title UC16: AI Practice Mode - GPT-Powered Move Suggestion
+
+actor Player
+participant Frontend
+participant GptAiController
+participant "OpenAI GPT-4" as GPT
+participant GameService
+participant GameRepository
+database MongoDB
+
+== Player vs AI Practice Mode ==
+
+Player -> Frontend: Start practice game with AI
+activate Frontend
+Frontend -> GameService: createPracticeGame(playerId, mode: PRACTICE)
+activate GameService
+GameService -> GameRepository: save(game)
+activate GameRepository
+GameRepository -> MongoDB: INSERT practice game
+activate MongoDB
+MongoDB --> GameRepository: game created
+deactivate MongoDB
+deactivate GameRepository
+GameService --> Frontend: GameStateResponse
+deactivate GameService
+deactivate Frontend
+
+== Player Makes Move ==
+
+Player -> Frontend: Place stone at (x: 5, y: 5)
+activate Frontend
+Frontend -> GameService: executeAction(roomId, playerId, MOVE)
+activate GameService
+GameService -> GameRepository: findByRoomId(roomId)
+GameRepository --> GameService: game state
+GameService -> GameService: validate and execute move
+GameService -> GameRepository: save(game)
+GameService --> Frontend: updated state (player moved)
+deactivate GameService
+Frontend --> Player: Display updated board
+deactivate Frontend
+
+== AI Turn - Request Move Suggestion ==
+
+Frontend -> GptAiController: POST /ai/gpt-move\n(board, next: WHITE, k: 10, style: BALANCE)
+activate GptAiController
+
+GptAiController -> GptAiController: 1. Check immediate win
+note right
+  Scan board for 5-in-a-row
+  If found, return winning move
+end note
+
+GptAiController -> GptAiController: 2. Check opponent win block
+note right
+  Scan for opponent's 4-in-a-row
+  If found, return blocking move
+end note
+
+GptAiController -> GptAiController: 3. Generate top K candidates
+note right
+  - Score each empty position
+  - Consider offense/defense weights
+  - Apply style (OFFENSE/BALANCE/DEFENSE)
+  - Sort by heuristic score
+  - Return top 10 candidates
+end note
+
+GptAiController -> GPT: POST /v1/chat/completions
+activate GPT
+note right
+  Request:
+  - model: gpt-4o-mini
+  - temperature: 0.1
+  - system: "You are a Gomoku AI"
+  - user: board state + candidates
+  - response_format: json_object
+end note
+
+GPT -> GPT: Analyze board position\nand candidate moves
+GPT --> GptAiController: JSON response {x, y}
+deactivate GPT
+
+GptAiController -> GptAiController: Validate move legality
+note right
+  - Check position is within board
+  - Check position is empty
+  - Fallback to heuristic if invalid
+end note
+
+GptAiController --> Frontend: ApiResult<AiMove> {x: 6, y: 6}
+deactivate GptAiController
+
+== Execute AI Move ==
+
+Frontend -> GameService: executeAction(roomId, aiPlayerId, MOVE, x: 6, y: 6)
+activate GameService
+GameService -> GameRepository: findByRoomId(roomId)
+GameRepository --> GameService: game state
+
+GameService -> GameService: Validation Chain
+note right
+  - TurnValidateChain
+  - BoardSizeValidateChain
+  - StonePositionValidateChain
+end note
+
+GameService -> GameService: Execution Chain
+note right
+  - NormalMoveExecuteChain
+  - WinExecuteChain (check 5-in-a-row)
+end note
+
+alt AI wins
+  GameService -> GameService: set winner = AI\nset status = FINISHED
+  GameService -> GameRepository: save(game)
+  GameService --> Frontend: game finished (AI wins)
+  Frontend --> Player: Display "AI wins!"
+else no win detected
+  GameService -> GameService: switch turn to player
+  GameService -> GameRepository: save(game)
+  GameService --> Frontend: game continues
+  Frontend --> Player: Display AI move, your turn
+end
+
+deactivate GameService
+
+== Game Loop Continues ==
+
+note over Player, MongoDB
+  The game alternates between player moves
+  and AI-suggested moves until:
+  - One side achieves 5-in-a-row (win)
+  - Player surrenders
+  - Board is full (draw)
+end note
+
+@enduml

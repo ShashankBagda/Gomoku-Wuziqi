@@ -1,0 +1,114 @@
+server:
+  port: 8093
+
+spring:
+  application:
+    name: gateway
+  cloud:
+    gateway:
+      server:
+        webflux:
+          routes:
+            # ---------- User Service ----------
+            - id: user-public-key
+              uri: http://user-service:8091
+              predicates:
+                - Path=/api/user/public-key
+              filters:
+                - StripPrefix=0
+
+            - id: user-register
+              uri: http://user-service:8091
+              predicates:
+                - Path=/api/user/register
+              filters:
+                - StripPrefix=0
+
+            - id: user-login
+              uri: http://user-service:8091
+              predicates:
+                - Path=/api/user/login
+              filters:
+                - StripPrefix=0
+
+            - id: user-send-email-code
+              uri: http://user-service:8091
+              predicates:
+                - Path=/api/user/verify/send-email/send
+              filters:
+                - StripPrefix=0
+
+            - id: user-reset-password
+              uri: http://user-service:8091
+              predicates:
+                - Path=/api/user/reset-password
+              filters:
+                - StripPrefix=0
+
+            # User protected routes
+            - id: user-service
+              uri: http://user-service:8091
+              predicates:
+                - Path=/api/user/**
+              filters:
+                - StripPrefix=0
+                - name: AuthenticationFilter
+
+            # ---------- Match Service ----------
+            - id: match-service
+              uri: http://match-service:8094
+              predicates:
+                - Path=/api/gomoku/match/**
+              filters:
+                - StripPrefix=0
+                - name: AuthenticationFilter
+
+            # ---------- Room Service ----------
+            - id: room-service
+              uri: http://room-service:8095
+              predicates:
+                - Path=/api/gomoku/lobby/**
+              filters:
+                - StripPrefix=0
+                - name: AuthenticationFilter
+
+            - id: room-service-player
+              uri: http://room-service:8095
+              predicates:
+                - Path=/api/gomoku/player/**
+              filters:
+                - StripPrefix=0
+                - name: AuthenticationFilter
+
+            # ---------- Gomoku Service ----------
+            - id: gomoku-service
+              uri: http://gomoku-service:8090
+              predicates:
+                - Path=/api/gomoku/**
+              filters:
+                - StripPrefix=0
+                - name: AuthenticationFilter
+
+            # (Legacy communication routes removed; using REST+SSE under /api/gomoku/rtc/**)
+
+            # ---------- Ranking Service ----------
+            - id: ranking-service-leaderboard
+              uri: http://ranking-service:8092
+              predicates:
+                - Path=/api/ranking/leaderboard
+              filters:
+                - StripPrefix=0
+
+            - id: ranking-service
+              uri: http://ranking-service:8092
+              predicates:
+                - Path=/api/ranking/**
+              filters:
+                - StripPrefix=0
+                - name: AuthenticationFilter
+          default-filters:
+            - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
+
+# User service configuration for verify endpoint
+user-service:
+  verify-url: http://user-service:8091/api/user/verify

@@ -1,0 +1,61 @@
+@startuml UC12 - Get Game State (Polling)
+
+title UC12: Get Game State - Frontend Polling
+
+actor Player2
+participant GameController
+participant GameService
+participant GameRepository
+database MongoDB
+
+note over Player2, MongoDB
+  Frontend polls this endpoint periodically
+  (e.g., every 1-2 seconds)
+  to get latest game state updates
+end note
+
+Player2 -> GameController: GET /game/{roomId}/state\n(X-User-Id: player2Id)
+activate GameController
+GameController -> GameService: getState(roomId, player2Id)
+activate GameService
+
+GameService -> GameRepository: findByRoomId(roomId)
+activate GameRepository
+GameRepository -> MongoDB: FIND game\nWHERE roomId = ?
+activate MongoDB
+MongoDB --> GameRepository: Game document
+deactivate MongoDB
+deactivate GameRepository
+
+GameService -> GameService: validate player in game
+note right
+  Check if player2Id matches
+  either player1Id or player2Id
+  in the game document
+end note
+
+alt player not in game
+  GameService --> GameController: throw BizException
+  GameController --> Player2: 403 Forbidden
+else player is in game
+  GameService -> GameService: build GameStateResponse
+  note right
+    Response contains:
+    - currentState (board, turn, winner)
+    - lastAction (last move/action)
+    - status (WAITING/PLAYING/FINISHED)
+    - player1Ready, player2Ready
+  end note
+
+  GameService --> GameController: GameStateResponse
+  deactivate GameService
+  GameController --> Player2: 200 OK\n(currentState, lastAction, status)
+  deactivate GameController
+end
+
+note over Player2
+  Frontend continues polling
+  until game ends or player leaves
+end note
+
+@enduml

@@ -1,0 +1,17 @@
+# Locust Performance Testing Dependencies
+
+# Core testing framework
+locust==2.20.0
+
+# Cryptography for RSA encryption
+cryptography==42.0.5
+
+# HTTP client (included with locust, but specified for clarity)
+requests==2.31.0
+
+# Optional: Data analysis and reporting
+pandas==2.2.1
+matplotlib==3.8.3
+
+# Optional: Better JSON handling
+ujson==5.9.0

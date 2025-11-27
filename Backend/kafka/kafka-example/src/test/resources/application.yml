@@ -1,0 +1,65 @@
+spring:
+  application:
+    name: kafka-example-test
+  cloud:
+    stream:
+      # Kafka binder configuration for testing
+      kafka:
+        binder:
+          brokers: 152.42.207.145:8201
+          auto-create-topics: true
+          # Connection configuration
+          configuration:
+            enable.auto.commit: true
+            # Connection timeout (default: 30000ms)
+            connections.max.idle.ms: 540000
+            # Request timeout (default: 30000ms)
+            request.timeout.ms: 60000
+            # Session timeout (default: 10000ms)
+            session.timeout.ms: 30000
+            # Heartbeat interval
+            heartbeat.interval.ms: 3000
+            # Metadata max age
+            metadata.max.age.ms: 180000
+            # Reconnect backoff
+            reconnect.backoff.ms: 50
+            reconnect.backoff.max.ms: 1000
+        bindings:
+          gameEndConsumer-in-0:
+            consumer:
+              # Enable auto commit
+#              enable-auto-commit: true
+              # Start from earliest if no offset
+              start-offset: earliest
+              # Consumer configuration
+              configuration:
+                max.poll.interval.ms: 300000
+                max.poll.records: 500
+      # Binding configuration
+      bindings:
+        # Producer binding
+        gameEnd-out-0:
+          destination: game-end-test-topic
+          content-type: application/json
+          producer:
+            # Producer partitioning
+            partition-count: 1
+        # Consumer binding
+        gameEndConsumer-in-0:
+          destination: game-end-test-topic
+          group: game-end-test-consumer-group
+          content-type: application/json
+          consumer:
+            # Consumer concurrency
+            concurrency: 1
+      # Function definition
+      function:
+        definition: gameEndConsumer
+
+logging:
+  level:
+    com.goody.nus.se.gomoku: DEBUG
+    org.springframework.cloud.stream: DEBUG
+    org.springframework.kafka: DEBUG
+    org.apache.kafka: DEBUG
+    org.apache.kafka.clients: DEBUG

@@ -1,0 +1,126 @@
+services:
+  # Gomoku Controller Service
+  gomoku-service:
+    image: 152.42.207.145:5000/gomoku-project/gomoku-controller:test
+    build:
+      context: .
+      dockerfile: gomoku/gomoku-controller/Dockerfile
+      args:
+        JAR_FILE: gomoku/gomoku-controller/target/gomoku-controller.jar
+    container_name: gomoku-controller
+    ports:
+      - "8080:8080"
+    environment:
+      JAVA_OPT: "-Dspring.profiles.active=test"
+      SERVER_PORT: 8080
+      # WebRTC TURN configuration (optional but recommended)
+      TURN_HOST: ${TURN_HOST:-turn.goodyhao.me:3478}
+      TURN_SECRET: ${TURN_SECRET:-change-me-secret}
+      TURN_TTL: 3600
+      # LiveKit SFU configuration for voice
+      LIVEKIT_URL: ${LIVEKIT_URL:-}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
+    restart: unless-stopped
+
+  # Match Controller Service
+  match-service:
+    image: 152.42.207.145:5000/gomoku-project/gomoku-controller-match:test
+    build:
+      context: .
+      dockerfile: gomoku/gomoku-controller-match/Dockerfile
+      args:
+        JAR_FILE: gomoku/gomoku-controller-match/target/gomoku-controller-match.jar
+    container_name: gomoku-controller-match
+    ports:
+      - "8084:8084"
+    environment:
+      JAVA_OPT: "-Dspring.profiles.active=test"
+      SERVER_PORT: 8084
+    restart: unless-stopped
+
+  # Room Controller Service
+  room-service:
+    image: 152.42.207.145:5000/gomoku-project/gomoku-controller-room:test
+    build:
+      context: .
+      dockerfile: gomoku/gomoku-controller-room/Dockerfile
+      args:
+        JAR_FILE: gomoku/gomoku-controller-room/target/gomoku-controller-room.jar
+    container_name: gomoku-controller-room
+    ports:
+      - "8085:8085"
+    environment:
+      JAVA_OPT: "-Dspring.profiles.active=test"
+      SERVER_PORT: 8085
+    restart: unless-stopped
+
+  # User Controller Service
+  user-service:
+    image: 152.42.207.145:5000/gomoku-project/user-controller:test
+    build:
+      context: .
+      dockerfile: user/user-controller/Dockerfile
+      args:
+        JAR_FILE: user/user-controller/target/user-controller.jar
+    container_name: user-controller
+    ports:
+      - "8081:8081"
+    environment:
+      JAVA_OPT: "-Dspring.profiles.active=test"
+      SERVER_PORT: 8081
+    restart: unless-stopped
+
+  # Ranking Controller Service
+  ranking-service:
+    image: 152.42.207.145:5000/gomoku-project/ranking-controller:test
+    build:
+      context: .
+      dockerfile: ranking/ranking-controller/Dockerfile
+      args:
+        JAR_FILE: ranking/ranking-controller/target/ranking-controller.jar
+    container_name: ranking-controller
+    ports:
+      - "8082:8082"
+    environment:
+      JAVA_OPT: "-Dspring.profiles.active=test"
+      SERVER_PORT: 8082
+    restart: unless-stopped
+
+  # Gateway Service
+  gateway:
+    image: 152.42.207.145:5000/gomoku-project/gateway:test
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+      args:
+        JAR_FILE: gateway/target/gateway.jar
+    container_name: gateway
+    ports:
+      - "8083:8083"
+    environment:
+      JAVA_OPT: "-Dspring.profiles.active=test"
+      SERVER_PORT: 8083
+    restart: unless-stopped
+
+  # TURN server for WebRTC relay (optional but recommended)
+  turn:
+    image: instrumentisto/coturn
+    container_name: turn
+    ports:
+      - "3478:3478"
+      - "3478:3478/udp"
+      - "49160-49200:49160-49200/udp"
+    command: [
+      "-n",
+      "--log-file=stdout",
+      "--realm=gomoku",
+      "--use-auth-secret",
+      "--static-auth-secret=${TURN_SECRET:-change-me-secret}",
+      "--no-cli",
+      "--no-tls",
+      "--min-port=49160",
+      "--max-port=49200",
+      "--fingerprint"
+    ]
+    restart: unless-stopped

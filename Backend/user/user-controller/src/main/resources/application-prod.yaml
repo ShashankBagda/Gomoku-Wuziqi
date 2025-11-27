@@ -1,0 +1,51 @@
+server:
+  servlet:
+    context-path: /api/user
+  port: 8091
+
+spring:
+  application.name: user
+  datasource:
+    url: ${USER_DB_URL}
+    username: ${USER_DB_USERNAME}
+    password: ${USER_DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      minimum-idle: 1
+      maximum-pool-size: 2
+# mybatis name rule
+mybatis:
+  configuration:
+    map-underscore-to-camel-case: true
+
+# JWT configuration
+# Note: JWT uses refresh_token from database as signing key, not a fixed secret
+jwt:
+  expiration: 86400000 # 24 hours in milliseconds
+sendgrid:
+  verify-switch-off: false
+  api-key: ${SENDGRID_API_KEY}
+  from-email: no-reply@goodyhao.me
+
+# Redisson Configuration Example
+redisson:
+  # Enable Redis (set to false to disable)
+  enabled: true
+
+  # Redis mode: SINGLE, CLUSTER, SENTINEL
+  mode: SINGLE
+  # Redis password (optional)
+  password: ${REDIS_PASSWORD}
+
+  # Connection pool settings
+  connection-pool-size: 5
+  connection-minimum-idle-size: 1
+
+  # Timeout settings (milliseconds)
+  timeout: 3000
+  connect-timeout: 10000
+
+  # Single server configuration
+  single:
+    address: redis://redis.goodyhao.me:8200
+    database: 0

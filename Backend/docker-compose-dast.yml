@@ -1,0 +1,45 @@
+services:
+  gomoku-service:
+    image: 152.42.207.145:5000/gomoku-project/gomoku-controller:test
+    build:
+      context: .
+      dockerfile: gomoku/gomoku-controller/Dockerfile
+      args:
+        JAR_FILE: gomoku/gomoku-controller/target/gomoku-controller.jar
+    environment:
+      JAVA_OPT: "-Dspring.profiles.active=test"
+      SERVER_PORT: 8080
+
+  user-service:
+    image: 152.42.207.145:5000/gomoku-project/user-controller:test
+    build:
+      context: .
+      dockerfile: user/user-controller/Dockerfile
+      args:
+        JAR_FILE: user/user-controller/target/user-controller.jar
+    environment:
+      JAVA_OPT: "-Dspring.profiles.active=test"
+      SERVER_PORT: 8081
+
+  ranking-service:
+    image: 152.42.207.145:5000/gomoku-project/ranking-controller:test
+    build:
+      context: .
+      dockerfile: ranking/ranking-controller/Dockerfile
+      args:
+        JAR_FILE: ranking/ranking-controller/target/ranking-controller.jar
+    environment:
+      JAVA_OPT: "-Dspring.profiles.active=test"
+      SERVER_PORT: 8082
+
+  gateway:
+    image: 152.42.207.145:5000/gomoku-project/gateway:test
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+      args:
+        JAR_FILE: gateway/target/gateway.jar
+    environment:
+      JAVA_OPT: "-Dspring.profiles.active=test"
+      SERVER_PORT: 8083
+

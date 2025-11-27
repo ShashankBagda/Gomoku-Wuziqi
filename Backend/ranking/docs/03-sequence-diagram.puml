@@ -1,0 +1,44 @@
+@startuml Ranking Service Sequence Diagrams - Overview
+
+title Ranking Service - Sequence Diagram Index
+
+note as N1
+**Sequence diagrams have been split into separate files for better readability:**
+
+**Match Settlement:**
+- 03-01-settle-match-sequence.puml
+  UC1: Settle Match - RANKED Mode with Winner
+  Complete settlement flow with idempotency check
+  Process winner and loser rewards
+  Update exp, score, level for multiple leaderboards
+
+**Player Profile:**
+- 03-02-player-profile-sequence.puml
+  UC5: Get Player Profile
+  Query all leaderboard data
+  Calculate level progress and win rate
+  Get rank positions across all boards
+
+**Leaderboards:**
+- 03-03-leaderboards-sequence.puml
+  UC9/UC10/UC11: Get Top Leaderboards
+  Fetch top 50 players from DAILY, WEEKLY, MONTHLY boards
+  Public endpoint for leaderboard display
+
+**Rules Configuration:**
+- 03-04-ranking-rules-sequence.puml
+  UC13: Get Ranking Rules Configuration
+  Fetch all score rules, exp rules, level thresholds
+  Frontend can display expected rewards
+
+**Scheduled Tasks:**
+- 03-05-reset-leaderboard-sequence.puml
+  UC17: Reset Periodic Leaderboards
+  Archive old rankings
+  Reset scores and recalculate positions
+  Triggered by scheduler (daily/weekly/monthly)
+
+**Please view individual files for detailed sequence flows.**
+end note
+
+@enduml

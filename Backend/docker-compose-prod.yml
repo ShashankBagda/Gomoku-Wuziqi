@@ -1,0 +1,104 @@
+services:
+  # Gomoku Controller Service
+  gomoku-service:
+    image: 152.42.207.145:5000/gomoku-project/gomoku-controller:prod
+    build:
+      context: .
+      dockerfile: gomoku/gomoku-controller/Dockerfile
+      args:
+        JAR_FILE: gomoku/gomoku-controller/target/gomoku-controller.jar
+    container_name: gomoku-controller
+    ports:
+      - "8090:8090"
+    environment:
+      JAVA_OPT: "-Dspring.profiles.active=prod"
+      SERVER_PORT: 8090
+      # WebRTC TURN configuration (optional but recommended)
+      TURN_HOST: ${TURN_HOST:-turn.goodyhao.me:3478}
+      TURN_SECRET: ${TURN_SECRET:-change-me-secret}
+      TURN_TTL: 3600
+      # LiveKit SFU configuration for voice
+      LIVEKIT_URL: ${LIVEKIT_URL:-}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
+    restart: unless-stopped
+
+  # Match Controller Service
+  match-service:
+    image: 152.42.207.145:5000/gomoku-project/gomoku-controller-match:prod
+    build:
+      context: .
+      dockerfile: gomoku/gomoku-controller-match/Dockerfile
+      args:
+        JAR_FILE: gomoku/gomoku-controller-match/target/gomoku-controller-match.jar
+    container_name: gomoku-controller-match
+    ports:
+      - "8094:8094"
+    environment:
+      JAVA_OPT: "-Dspring.profiles.active=prod"
+      SERVER_PORT: 8094
+    restart: unless-stopped
+
+  # Room Controller Service
+  room-service:
+    image: 152.42.207.145:5000/gomoku-project/gomoku-controller-room:prod
+    build:
+      context: .
+      dockerfile: gomoku/gomoku-controller-room/Dockerfile
+      args:
+        JAR_FILE: gomoku/gomoku-controller-room/target/gomoku-controller-room.jar
+    container_name: gomoku-controller-room
+    ports:
+      - "8095:8095"
+    environment:
+      JAVA_OPT: "-Dspring.profiles.active=prod"
+      SERVER_PORT: 8095
+    restart: unless-stopped
+
+  # User Controller Service
+  user-service:
+    image: 152.42.207.145:5000/gomoku-project/user-controller:prod
+    build:
+      context: .
+      dockerfile: user/user-controller/Dockerfile
+      args:
+        JAR_FILE: user/user-controller/target/user-controller.jar
+    container_name: user-controller
+    ports:
+      - "8091:8091"
+    environment:
+      JAVA_OPT: "-Dspring.profiles.active=prod"
+      SERVER_PORT: 8091
+    restart: unless-stopped
+
+  # Ranking Controller Service
+  ranking-service:
+    image: 152.42.207.145:5000/gomoku-project/ranking-controller:prod
+    build:
+      context: .
+      dockerfile: ranking/ranking-controller/Dockerfile
+      args:
+        JAR_FILE: ranking/ranking-controller/target/ranking-controller.jar
+    container_name: ranking-controller
+    ports:
+      - "8092:8092"
+    environment:
+      JAVA_OPT: "-Dspring.profiles.active=prod"
+      SERVER_PORT: 8092
+    restart: unless-stopped
+
+  # Gateway Service
+  gateway:
+    image: 152.42.207.145:5000/gomoku-project/gateway:prod
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+      args:
+        JAR_FILE: gateway/target/gateway.jar
+    container_name: gateway
+    ports:
+      - "8093:8093"
+    environment:
+      JAVA_OPT: "-Dspring.profiles.active=prod"
+      SERVER_PORT: 8093
+    restart: unless-stopped

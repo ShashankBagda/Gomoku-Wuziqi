@@ -1,0 +1,4 @@
+sendgrid:
+  verify-switch-off: true
+  api-key: ${SENDGRID_API_KEY}
+  from-email: no-reply.goodyhao.me

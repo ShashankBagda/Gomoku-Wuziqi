@@ -1,0 +1,196 @@
+@startuml AI Practice - Class Diagram
+!define RECTANGLE class
+
+skinparam {
+    backgroundColor white
+    shadowing false
+    defaultFontName Arial
+    defaultFontSize 11
+}
+
+skinparam class {
+    BackgroundColor #FFFFFF
+    BorderColor #424242
+    ArrowColor #424242
+    FontStyle bold
+}
+
+skinparam package {
+    BackgroundColor<<frontend>> #E3F2FD
+    BackgroundColor<<backend>> #FFF3E0
+    BackgroundColor<<domain>> #E8F5E9
+    BackgroundColor<<external>> #F3E5F5
+    BorderColor Black
+    FontStyle bold
+}
+
+' ==================== FRONTEND LAYER ====================
+package "Frontend (React)" <<frontend>> {
+    class Practice {
+        - board: Cell[][]
+        - turn: "black" | "white"
+        - humanColor: "black" | "white"
+        - busy: boolean
+        - winnerCode: number
+        - k: number
+        - style: string
+        - historyRef: Move[]
+        + handleClick(r, c): void
+        + handleUndo(): void
+        + resetGame(): void
+        + checkWinner(board): number
+        - toIntBoard(board): int[][]
+    }
+
+    class AiApi {
+        + getGptMove(board, next, opts): Promise<AiMove>
+    }
+
+    class Move {
+        + row: number
+        + col: number
+        + color: string
+    }
+
+    class Cell {
+        + value: "black" | "white" | null
+    }
+
+    Practice --> AiApi : uses
+    Practice *-- Move : history
+    Practice o-- Cell : board
+}
+
+' ==================== BACKEND LAYER ====================
+package "Backend (Spring Boot)" <<backend>> {
+    class GptAiController <<@RestController>> {
+        - http: HttpClient
+        - OPENAI_API_KEY_FALLBACK: String
+        - OPENAI_BASE: String
+        - OPENAI_MODEL: String
+        + suggestMove(req: AiRequest): ApiResult<AiMove>
+        - chooseWithGpt(board, next, top): AiMove
+        - findImmediateWin(board, player): AiMove
+        - heuristicMove(board, next): AiMove
+        - topCandidates(board, me, k, style): List<ScoredMove>
+        - scoreMove(board, r, c, player): int
+        - patternScore(board, r, c, dr, dc, player, n): int
+        - isFive(board, r, c, player): boolean
+    }
+
+    class AiRequest {
+        + board: int[][]
+        + next: String
+        + k: Integer
+        + style: String
+    }
+
+    class AiMove {
+        + x: int
+        + y: int
+    }
+
+    class ScoredMove {
+        + x: int
+        + y: int
+        + score: int
+        + toMove(): AiMove
+    }
+
+    enum Style {
+        OFFENSE(3, 1)
+        BALANCE(2, 2)
+        DEFENSE(2, 3)
+        --
+        + a: int
+        + d: int
+        + combine(sMe, sOpp): int
+        + from(s: String): Style
+    }
+
+    GptAiController ..> AiRequest : receives
+    GptAiController ..> AiMove : returns
+    GptAiController ..> ScoredMove : uses internally
+    GptAiController --> Style : uses
+    ScoredMove --> AiMove : converts to
+}
+
+' ==================== DOMAIN LAYER ====================
+package "Domain Models" <<domain>> {
+    class Board {
+        + cells: int[][]
+        + size: int
+        + isEmpty(x, y): boolean
+        + placeStone(x, y, player): void
+    }
+
+    class Player {
+        + id: int
+        + color: "BLACK" | "WHITE"
+    }
+
+    class GameState {
+        + board: Board
+        + currentTurn: Player
+        + winner: Player
+        + isGameOver: boolean
+    }
+
+    GameState *-- Board
+    GameState o-- Player
+}
+
+' ==================== EXTERNAL SERVICES ====================
+package "External Services" <<external>> {
+    interface OpenAI {
+        + chat.completions: Endpoint
+    }
+
+    class ApiResult <<Generic>> {
+        + code: int
+        + message: String
+        + data: T
+        + success(data: T): ApiResult<T>
+        + failed(code, msg): ApiResult<T>
+    }
+
+    GptAiController ..> OpenAI : calls API
+    GptAiController ..> ApiResult : wraps response
+}
+
+' ==================== RELATIONSHIPS ====================
+' Frontend to Backend
+AiApi ..> GptAiController : HTTP POST /ai/gpt-move
+
+' Backend to Domain
+GptAiController ..> Board : operates on
+GptAiController ..> GameState : evaluates
+
+' Strategy Pattern
+note right of Style
+    Strategy Pattern:
+    Different AI playing styles
+    - OFFENSE: 3x attack, 1x defense
+    - BALANCE: 2x attack, 2x defense
+    - DEFENSE: 2x attack, 3x defense
+end note
+
+' Algorithm notes
+note bottom of GptAiController
+    <b>AI Move Selection Algorithm:</b>
+    1. Check immediate win → return
+    2. Block opponent win → return
+    3. Score top K candidates by heuristic
+    4. Send candidates to GPT-4 for selection
+    5. Fallback to heuristic if GPT fails
+end note
+
+note bottom of Practice
+    <b>Frontend State Management:</b>
+    - Local state (useState) for game board
+    - Ref for move history (undo support)
+    - Async call to backend for AI move
+    - Winner detection client-side
+end note
+
+@enduml

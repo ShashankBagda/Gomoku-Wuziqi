@@ -1,0 +1,13 @@
+spring:
+  datasource:
+    url: ${GOMOKU_DB_URL}
+    username: ${GOMOKU_DB_USERNAME}
+    password: ${GOMOKU_DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      minimum-idle: 1
+      maximum-pool-size: 2
+# mybatis name rule
+mybatis:
+  configuration:
+    map-underscore-to-camel-case: true

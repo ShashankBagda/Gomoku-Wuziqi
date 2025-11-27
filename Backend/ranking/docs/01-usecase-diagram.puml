@@ -1,0 +1,112 @@
+@startuml Ranking Service Use Case Diagram
+
+left to right direction
+
+actor "Player" as Player
+actor "Game System" as GameSys
+actor "Scheduler" as Scheduler
+
+rectangle "Ranking & Progression System" {
+
+  rectangle "Match Settlement" {
+    usecase "Settle Match Result" as UC1
+    usecase "Calculate Score Change" as UC2
+    usecase "Award Experience Points" as UC3
+    usecase "Update Level" as UC4
+  }
+
+  rectangle "Player Profile" {
+    usecase "View Player Profile" as UC5
+    usecase "View Level & Experience" as UC6
+    usecase "View Win Rate" as UC7
+    usecase "View Match History" as UC8
+  }
+
+  rectangle "Leaderboard" {
+    usecase "View Daily Leaderboard" as UC9
+    usecase "View Weekly Leaderboard" as UC10
+    usecase "View Monthly Leaderboard" as UC11
+    usecase "View Player Rank" as UC12
+  }
+
+  rectangle "Rules & Configuration" {
+    usecase "View Ranking Rules" as UC13
+    usecase "View Experience Rules" as UC14
+    usecase "View Score Rules" as UC15
+    usecase "View Level Thresholds" as UC16
+  }
+
+  rectangle "System Maintenance" {
+    usecase "Reset Periodic Leaderboards" as UC17
+    usecase "Recalculate Rankings" as UC18
+  }
+}
+
+' Player interactions
+Player --> UC5
+Player --> UC6
+Player --> UC7
+Player --> UC8
+Player --> UC9
+Player --> UC10
+Player --> UC11
+Player --> UC12
+Player --> UC13
+Player --> UC14
+Player --> UC15
+Player --> UC16
+
+' Game system triggers
+GameSys --> UC1
+
+' Scheduler interactions
+Scheduler --> UC17
+Scheduler --> UC18
+
+' Include relationships
+UC1 ..> UC2 : <<include>>
+UC1 ..> UC3 : <<include>>
+UC1 ..> UC4 : <<include>>
+
+UC5 ..> UC6 : <<include>>
+UC5 ..> UC7 : <<include>>
+UC5 ..> UC12 : <<include>>
+
+UC13 ..> UC14 : <<include>>
+UC13 ..> UC15 : <<include>>
+UC13 ..> UC16 : <<include>>
+
+' Extend relationships
+UC4 ..> UC5 : <<extend>>\nupdate profile on level up
+
+UC17 ..> UC18 : <<extend>>\nrecalculate after reset
+
+note right of "Match Settlement"
+  Triggered by Game System
+  when match finishes.
+  Supports:
+  - RANKED mode (score + exp)
+  - CASUAL mode (exp only)
+  - PRIVATE mode (exp only)
+end note
+
+note right of "Leaderboard"
+  Leaderboards are periodic:
+  - DAILY: reset every day
+  - WEEKLY: reset every week
+  - MONTHLY: reset every month
+
+  Players ranked by total score
+end note
+
+note right of "Rules & Configuration"
+  Rules are configurable:
+  - Win: +50 exp, +25 score
+  - Lose: +10 exp, -15 score
+  - Draw: +20 exp, 0 score
+
+  Levels: 1-100
+  Exp thresholds increase per level
+end note
+
+@enduml

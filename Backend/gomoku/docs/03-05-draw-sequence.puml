@@ -1,0 +1,119 @@
+@startuml UC9 - Request Draw
+
+title UC9: Request Draw - Propose and Agree
+
+actor Player1
+actor Player2
+participant GameController
+participant GameService
+participant GameRepository
+participant ValidateChain
+participant DrawValidateChain
+participant DrawAgreeValidateChain
+participant ExecuteChain
+participant DrawExecuteChain
+participant DrawAgreeExecuteChain
+database MongoDB
+
+== Player1 Proposes Draw ==
+
+Player1 -> GameController: POST /game/{roomId}/action\n(type: DRAW)
+activate GameController
+GameController -> GameService: executeAction(roomId, player1Id, DRAW)
+activate GameService
+
+GameService -> GameRepository: findByRoomId(roomId)
+activate GameRepository
+GameRepository -> MongoDB: FIND game
+activate MongoDB
+MongoDB --> GameRepository: Game document
+deactivate MongoDB
+deactivate GameRepository
+
+GameService -> ValidateChain: validate(game, DRAW)
+activate ValidateChain
+ValidateChain -> DrawValidateChain: validate()
+activate DrawValidateChain
+DrawValidateChain -> DrawValidateChain: check game is PLAYING
+DrawValidateChain -> DrawValidateChain: check no pending draw
+DrawValidateChain --> ValidateChain: valid
+deactivate DrawValidateChain
+ValidateChain --> GameService: valid
+deactivate ValidateChain
+
+GameService -> ExecuteChain: execute(game, DRAW)
+activate ExecuteChain
+ExecuteChain -> DrawExecuteChain: execute()
+activate DrawExecuteChain
+DrawExecuteChain -> DrawExecuteChain: set pendingDrawRequest = true
+DrawExecuteChain -> DrawExecuteChain: set drawProposer = player1Id
+DrawExecuteChain --> ExecuteChain: state updated
+deactivate DrawExecuteChain
+ExecuteChain --> GameService: draw pending
+deactivate ExecuteChain
+
+GameService -> GameRepository: save(game)
+activate GameRepository
+GameRepository -> MongoDB: UPDATE game
+activate MongoDB
+MongoDB --> GameRepository: success
+deactivate MongoDB
+deactivate GameRepository
+
+GameService --> GameController: GameStateResponse
+deactivate GameService
+GameController --> Player1: 200 OK (draw requested)
+deactivate GameController
+
+== Player2 Agrees to Draw ==
+
+Player2 -> GameController: POST /game/{roomId}/action\n(type: DRAW_AGREE)
+activate GameController
+GameController -> GameService: executeAction(roomId, player2Id, DRAW_AGREE)
+activate GameService
+
+GameService -> GameRepository: findByRoomId(roomId)
+activate GameRepository
+GameRepository -> MongoDB: FIND game
+activate MongoDB
+MongoDB --> GameRepository: Game document
+deactivate MongoDB
+deactivate GameRepository
+
+GameService -> ValidateChain: validate(game, DRAW_AGREE)
+activate ValidateChain
+ValidateChain -> DrawAgreeValidateChain: validate()
+activate DrawAgreeValidateChain
+DrawAgreeValidateChain -> DrawAgreeValidateChain: check pendingDrawRequest = true
+DrawAgreeValidateChain -> DrawAgreeValidateChain: check player is not proposer
+DrawAgreeValidateChain --> ValidateChain: valid
+deactivate DrawAgreeValidateChain
+ValidateChain --> GameService: valid
+deactivate ValidateChain
+
+GameService -> ExecuteChain: execute(game, DRAW_AGREE)
+activate ExecuteChain
+ExecuteChain -> DrawAgreeExecuteChain: execute()
+activate DrawAgreeExecuteChain
+DrawAgreeExecuteChain -> DrawAgreeExecuteChain: set winner = 0 (draw)
+DrawAgreeExecuteChain -> DrawAgreeExecuteChain: set status = FINISHED
+DrawAgreeExecuteChain -> DrawAgreeExecuteChain: clear pendingDrawRequest
+DrawAgreeExecuteChain --> ExecuteChain: game finished (draw)
+deactivate DrawAgreeExecuteChain
+ExecuteChain --> GameService: draw accepted
+deactivate ExecuteChain
+
+GameService -> GameRepository: save(game)
+activate GameRepository
+GameRepository -> MongoDB: UPDATE game
+activate MongoDB
+MongoDB --> GameRepository: success
+deactivate MongoDB
+deactivate GameRepository
+
+GameService --> GameController: GameStateResponse
+deactivate GameService
+GameController --> Player2: 200 OK (game ended in draw)
+deactivate GameController
+
+@enduml

@@ -1,0 +1,53 @@
+# -----------------------------
+# Node / React (Frontend)
+# -----------------------------
+Frontend/node_modules/
+Frontend/build/
+Frontend/.cache/
+Frontend/coverage/
+Frontend/*.log
+
+# -----------------------------
+# Java / Maven (Backend)
+# -----------------------------
+**/target/
+*.jar
+*.war
+*.ear
+*.class
+
+# -----------------------------
+# Logs & temp
+# -----------------------------
+logs/
+*.log
+*.tmp
+*.swp
+*.swo
+
+# -----------------------------
+# Python / tooling
+# -----------------------------
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# -----------------------------
+# IDE / Editor
+# -----------------------------
+.idea/
+.vscode/
+*.iml
+
+# -----------------------------
+# OS-specific
+# -----------------------------
+.DS_Store
+Thumbs.db
+
+# -----------------------------
+# Env / secrets (local only)
+# -----------------------------
+.env
+.env.*
+

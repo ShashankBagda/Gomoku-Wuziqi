@@ -1,0 +1,109 @@
+@startuml UC6 - Both Players Ready
+
+title UC6: Both Players Ready - Game Start
+
+actor Player1
+actor Player2
+participant GameController
+participant GameService
+participant GameRepository
+participant ValidateChain
+participant ExecuteChain
+participant ReadyValidateChain
+participant SingleReadyExecuteChain
+participant BothReadyExecuteChain
+database MongoDB
+
+== Player1 Marks Ready ==
+
+Player1 -> GameController: POST /game/{roomId}/action\n(type: READY)
+activate GameController
+GameController -> GameService: executeAction(roomId, player1Id, READY)
+activate GameService
+
+GameService -> GameRepository: findByRoomId(roomId)
+activate GameRepository
+GameRepository -> MongoDB: FIND game
+activate MongoDB
+MongoDB --> GameRepository: Game document
+deactivate MongoDB
+deactivate GameRepository
+
+GameService -> ValidateChain: validate(game, action)
+activate ValidateChain
+ValidateChain -> ReadyValidateChain: validate()
+activate ReadyValidateChain
+ReadyValidateChain --> ValidateChain: valid
+deactivate ReadyValidateChain
+ValidateChain --> GameService: valid
+deactivate ValidateChain
+
+GameService -> ExecuteChain: execute(game, action)
+activate ExecuteChain
+ExecuteChain -> SingleReadyExecuteChain: execute()
+activate SingleReadyExecuteChain
+SingleReadyExecuteChain -> SingleReadyExecuteChain: set player1Ready = true
+SingleReadyExecuteChain --> ExecuteChain: updated state
+deactivate SingleReadyExecuteChain
+ExecuteChain --> GameService: updated state (1 ready)
+deactivate ExecuteChain
+
+GameService -> GameRepository: save(game)
+activate GameRepository
+GameRepository -> MongoDB: UPDATE game
+activate MongoDB
+MongoDB --> GameRepository: success
+deactivate MongoDB
+deactivate GameRepository
+
+GameService --> GameController: GameStateResponse
+deactivate GameService
+GameController --> Player1: 200 OK (player1Ready: true)
+deactivate GameController
+
+== Player2 Marks Ready ==
+
+Player2 -> GameController: POST /game/{roomId}/action\n(type: READY)
+activate GameController
+GameController -> GameService: executeAction(roomId, player2Id, READY)
+activate GameService
+
+GameService -> GameRepository: findByRoomId(roomId)
+activate GameRepository
+GameRepository -> MongoDB: FIND game
+activate MongoDB
+MongoDB --> GameRepository: Game document
+deactivate MongoDB
+deactivate GameRepository
+
+GameService -> ValidateChain: validate(game, action)
+activate ValidateChain
+ValidateChain --> GameService: valid
+deactivate ValidateChain
+
+GameService -> ExecuteChain: execute(game, action)
+activate ExecuteChain
+ExecuteChain -> BothReadyExecuteChain: execute()
+activate BothReadyExecuteChain
+BothReadyExecuteChain -> BothReadyExecuteChain: set player2Ready = true
+BothReadyExecuteChain -> BothReadyExecuteChain: change status to PLAYING
+BothReadyExecuteChain -> BothReadyExecuteChain: initialize board
+BothReadyExecuteChain --> ExecuteChain: updated state
+deactivate BothReadyExecuteChain
+ExecuteChain --> GameService: game started (PLAYING)
+deactivate ExecuteChain
+
+GameService -> GameRepository: save(game)
+activate GameRepository
+GameRepository -> MongoDB: UPDATE game
+activate MongoDB
+MongoDB --> GameRepository: success
+deactivate MongoDB
+deactivate GameRepository
+
+GameService --> GameController: GameStateResponse
+deactivate GameService
+GameController --> Player2: 200 OK (game started, status: PLAYING)
+deactivate GameController
+
+@enduml

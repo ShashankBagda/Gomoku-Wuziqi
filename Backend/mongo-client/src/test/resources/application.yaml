@@ -1,0 +1,14 @@
+spring:
+  data:
+    mongodb:
+      # MongoDB Atlas connection URI with TLS enabled
+      # Format: mongodb+srv://<username>:<password>@<cluster-url>/<database>?authSource=admin&replicaSet=<replicaSet>
+      uri: ${GOMOKU_MONGODB_URI}
+      # Default database name
+      database: ${GOMOKU_MONGODB_DATABASE:test_gomoku}
+
+logging:
+  level:
+    org.springframework.data.mongodb: DEBUG
+    com.mongodb: DEBUG
+    org.mongodb.driver: DEBUG

@@ -1,0 +1,127 @@
+version: '3.8'
+
+services:
+  # Gomoku Controller Service
+  gomoku-service:
+    image: 152.42.207.145:5000/gomoku-project/gomoku-controller:test
+    deploy:
+      mode: global
+    environment:
+      JAVA_OPT: "-Dspring.profiles.active=test"
+      SERVER_PORT: 8080
+      TURN_HOST: ${TURN_HOST:-turn.goodyhao.me:3478}
+      TURN_SECRET: ${TURN_SECRET:-change-me-secret}
+      TURN_TTL: 3600
+      LIVEKIT_URL: ${LIVEKIT_URL:-}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
+    networks:
+      - gomoku-network
+
+  # Match Controller Service
+  match-service:
+    image: 152.42.207.145:5000/gomoku-project/gomoku-controller-match:test
+    deploy:
+      mode: global
+    environment:
+      JAVA_OPT: "-Dspring.profiles.active=test"
+      SERVER_PORT: 8084
+    networks:
+      - gomoku-network
+
+  # Room Controller Service
+  room-service:
+    image: 152.42.207.145:5000/gomoku-project/gomoku-controller-room:test
+    deploy:
+      mode: global
+    environment:
+      JAVA_OPT: "-Dspring.profiles.active=test"
+      SERVER_PORT: 8085
+    networks:
+      - gomoku-network
+
+  # User Controller Service
+  user-service:
+    image: 152.42.207.145:5000/gomoku-project/user-controller:test
+    deploy:
+      mode: global
+    environment:
+      JAVA_OPT: "-Dspring.profiles.active=test"
+      SERVER_PORT: 8081
+    networks:
+      - gomoku-network
+
+  # Ranking Controller Service
+  ranking-service:
+    image: 152.42.207.145:5000/gomoku-project/ranking-controller:test
+    deploy:
+      mode: global
+    environment:
+      JAVA_OPT: "-Dspring.profiles.active=test"
+      SERVER_PORT: 8082
+    networks:
+      - gomoku-network
+
+  # Gateway Service
+  gateway:
+    image: 152.42.207.145:5000/gomoku-project/gateway:test
+    deploy:
+      mode: global
+    ports:
+      - target: 8083
+        published: 8083
+        protocol: tcp
+        mode: host
+    environment:
+      JAVA_OPT: "-Dspring.profiles.active=test"
+      SERVER_PORT: 8083
+    networks:
+      - gomoku-network
+
+  # TURN server (WebRTC relay)
+  turn:
+    image: instrumentisto/coturn
+    deploy:
+      mode: global
+    ports:
+      - target: 3478
+        published: 3478
+        protocol: tcp
+        mode: host
+      - target: 3478
+        published: 3478
+        protocol: udp
+        mode: host
+      - target: 49160
+        published: 49160
+        protocol: udp
+        mode: host
+      - target: 49161
+        published: 49161
+        protocol: udp
+        mode: host
+      - target: 49162
+        published: 49162
+        protocol: udp
+        mode: host
+    environment:
+      TURN_SECRET: ${TURN_SECRET:-change-me-secret}
+    command: [
+      "-n",
+      "--log-file=stdout",
+      "--realm=gomoku",
+      "--use-auth-secret",
+      "--static-auth-secret=${TURN_SECRET:-change-me-secret}",
+      "--no-cli",
+      "--no-tls",
+      "--min-port=49160",
+      "--max-port=49162",
+      "--fingerprint"
+    ]
+    networks:
+      - gomoku-network
+
+networks:
+  gomoku-network:
+    driver: overlay
+    attachable: true

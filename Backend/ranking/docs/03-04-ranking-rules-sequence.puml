@@ -1,0 +1,140 @@
+@startuml UC13 - Get Ranking Rules
+
+title UC13: Get Ranking Rules Configuration
+
+actor Player
+participant RankingController
+participant RankingBizService
+participant ScoreRuleService
+participant LevelRuleService
+participant LevelService
+participant LeaderboardService
+database MySQL
+
+Player -> RankingController: GET /ranking/rules
+activate RankingController
+RankingController -> RankingBizService: getRankingRules()
+activate RankingBizService
+
+note over RankingBizService
+  Fetch all configurable rules
+  for frontend display
+end note
+
+== Get Score Rules ==
+
+RankingBizService -> ScoreRuleService: findAll()
+activate ScoreRuleService
+ScoreRuleService -> MySQL: SELECT * FROM score_rule\nORDER BY mode_type, result_type
+activate MySQL
+MySQL --> ScoreRuleService: all score rules
+note right
+  Example rules:
+  - RANKED/WIN: +25 score
+  - RANKED/LOSE: -15 score
+  - RANKED/DRAW: 0 score
+  - CASUAL: no score rules
+  - PRIVATE: no score rules
+end note
+deactivate MySQL
+deactivate ScoreRuleService
+
+== Get Level Rules (Exp Rewards) ==
+
+RankingBizService -> LevelRuleService: findAll()
+activate LevelRuleService
+LevelRuleService -> MySQL: SELECT * FROM level_rule\nORDER BY mode_type, result_type
+activate MySQL
+MySQL --> LevelRuleService: all exp reward rules
+note right
+  Example rules:
+  - RANKED/WIN: +50 exp
+  - RANKED/LOSE: +10 exp
+  - RANKED/DRAW: +20 exp
+  - CASUAL/WIN: +30 exp
+  - CASUAL/LOSE: +10 exp
+  - PRIVATE/WIN: +15 exp
+  - PRIVATE/LOSE: +5 exp
+end note
+deactivate MySQL
+deactivate LevelRuleService
+
+== Get Level Thresholds ==
+
+RankingBizService -> LevelService: findAll()
+activate LevelService
+LevelService -> MySQL: SELECT * FROM level\nORDER BY level_number
+activate MySQL
+MySQL --> LevelService: all levels (1-100)
+note right
+  Example levels:
+  - Level 1: 0 exp required
+  - Level 2: 100 exp
+  - Level 3: 250 exp
+  - Level 10: 2000 exp
+  - Level 50: 50000 exp
+  - Level 100: 500000 exp
+
+  Required exp increases
+  exponentially or linearly
+  based on game design
+end note
+deactivate MySQL
+deactivate LevelService
+
+== Get Leaderboard Configs ==
+
+RankingBizService -> LeaderboardService: findAll()
+activate LeaderboardService
+LeaderboardService -> MySQL: SELECT * FROM leaderboard_rule\nWHERE is_active=1
+activate MySQL
+MySQL --> LeaderboardService: all active leaderboard configs
+note right
+  Example configs:
+  - DAILY (id=1, reset daily)
+  - WEEKLY (id=2, reset weekly)
+  - MONTHLY (id=3, reset monthly)
+  - SEASONAL (id=4, reset per season)
+  - TOTAL (id=5, never reset)
+end note
+deactivate MySQL
+deactivate LeaderboardService
+
+== Build Response ==
+
+RankingBizService -> RankingBizService: build RankingRulesResponse
+note right
+  Response structure:
+  {
+    scoreRules: [
+      { modeType, resultType, scoreChange }
+    ],
+    levelRules: [
+      { modeType, resultType, expReward }
+    ],
+    levels: [
+      { levelNumber, levelName, requiredExp }
+    ],
+    leaderboards: [
+      { scope, displayName, resetPeriod }
+    ]
+  }
+
+  **Frontend Usage:**
+  Display expected rewards:
+  "Win this RANKED match: +50 exp, +25 score"
+  "Current progress: Level 15 (234/500 to Level 16)"
+end note
+
+RankingBizService --> RankingController: RankingRulesResponse
+deactivate RankingBizService
+RankingController --> Player: 200 OK\n(complete rules configuration)
+deactivate RankingController
+
+note over Player
+  Frontend can cache these rules
+  and only refresh periodically
+  (e.g., once per day)
+end note
+
+@enduml

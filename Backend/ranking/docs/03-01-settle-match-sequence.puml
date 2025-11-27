@@ -1,0 +1,195 @@
+@startuml UC1 - Settle Match (RANKED Win)
+
+title UC1: Settle Match - RANKED Mode with Winner
+
+actor GameSystem
+participant RankingController
+participant RankingBizService
+participant ScoreRuleService
+participant LevelRuleService
+participant RankingService
+participant ScoreService
+participant LevelService
+participant LeaderboardService
+database MySQL
+
+GameSystem -> RankingController: POST /ranking/settle\n(matchId, winnerId, loserId, mode=RANKED)
+activate RankingController
+RankingController -> RankingBizService: settleMatch(request)
+activate RankingBizService
+
+== Check Idempotency ==
+
+RankingBizService -> ScoreService: findByMatchId(matchId)
+activate ScoreService
+ScoreService -> MySQL: SELECT * FROM score\nWHERE match_id=?
+activate MySQL
+
+alt match already settled
+  MySQL --> ScoreService: existing scores
+  deactivate MySQL
+  ScoreService --> RankingBizService: already settled
+  deactivate ScoreService
+  RankingBizService --> RankingController: MatchSettlementResponse
+  deactivate RankingBizService
+  RankingController --> GameSystem: 200 OK (idempotent)
+  deactivate RankingController
+end
+
+MySQL --> ScoreService: empty result
+deactivate MySQL
+deactivate ScoreService
+
+== Get Reward Rules ==
+
+RankingBizService -> ScoreRuleService: findByModeAndResult(RANKED, WIN)
+activate ScoreRuleService
+ScoreRuleService -> MySQL: SELECT * FROM score_rule\nWHERE mode_type='RANKED' AND result_type='WIN'
+activate MySQL
+MySQL --> ScoreRuleService: ScoreRule (scoreChange: +25)
+deactivate MySQL
+deactivate ScoreRuleService
+
+RankingBizService -> LevelRuleService: findByModeAndResult(RANKED, WIN)
+activate LevelRuleService
+LevelRuleService -> MySQL: SELECT * FROM level_rule\nWHERE mode_type='RANKED' AND result_type='WIN'
+activate MySQL
+MySQL --> LevelRuleService: LevelRule (expReward: +50)
+deactivate MySQL
+deactivate LevelRuleService
+
+== Get Active Leaderboards ==
+
+RankingBizService -> LeaderboardService: findAll()
+activate LeaderboardService
+LeaderboardService -> MySQL: SELECT * FROM leaderboard_rule\nWHERE is_active=1
+activate MySQL
+MySQL --> LeaderboardService: [DAILY, WEEKLY, MONTHLY]
+deactivate MySQL
+deactivate LeaderboardService
+
+== Process Winner ==
+
+loop for each leaderboard (DAILY, WEEKLY, MONTHLY)
+  RankingBizService -> RankingService: findByUserId(winnerId, leaderboardId)
+  activate RankingService
+  RankingService -> MySQL: SELECT * FROM ranking\nWHERE user_id=? AND leaderboard_rule_id=?
+  activate MySQL
+
+  alt ranking exists
+    MySQL --> RankingService: existing ranking
+    deactivate MySQL
+    RankingService --> RankingBizService: RankingDTO
+    deactivate RankingService
+
+    RankingBizService -> RankingBizService: update totalExp (+50)
+    RankingBizService -> RankingBizService: update currentTotalScore (+25)
+
+    RankingBizService -> LevelService: findByExp(newTotalExp)
+    activate LevelService
+    LevelService -> MySQL: SELECT * FROM level\nWHERE required_exp <= ?\nORDER BY required_exp DESC LIMIT 1
+    activate MySQL
+    MySQL --> LevelService: new Level
+    deactivate MySQL
+    deactivate LevelService
+
+    alt level up detected
+      RankingBizService -> RankingBizService: set levelUp = true\nrecord new level
+      note right
+        If newLevel > oldLevel
+        player has leveled up
+      end note
+    end
+
+    RankingBizService -> RankingService: update(ranking)
+    activate RankingService
+    RankingService -> MySQL: UPDATE ranking\nSET total_exp=?, level_id=?, current_total_score=?
+    activate MySQL
+    MySQL --> RankingService: success
+    deactivate MySQL
+    deactivate RankingService
+
+  else ranking not exists (new player)
+    MySQL --> RankingService: null
+    deactivate MySQL
+    RankingService --> RankingBizService: null
+    deactivate RankingService
+
+    RankingBizService -> RankingBizService: create new ranking\n(totalExp: 50, score: 25, level: 1)
+
+    RankingBizService -> RankingService: save(new ranking)
+    activate RankingService
+    RankingService -> MySQL: INSERT ranking
+    activate MySQL
+    MySQL --> RankingService: success
+    deactivate MySQL
+    deactivate RankingService
+  end
+
+  RankingBizService -> ScoreService: save(score record)
+  activate ScoreService
+  ScoreService -> MySQL: INSERT score\n(scoreChange=+25, matchResult='WIN')
+  activate MySQL
+  MySQL --> ScoreService: success
+  deactivate MySQL
+  deactivate ScoreService
+end
+
+== Process Loser ==
+
+RankingBizService -> ScoreRuleService: findByModeAndResult(RANKED, LOSE)
+activate ScoreRuleService
+ScoreRuleService -> MySQL: SELECT * FROM score_rule
+activate MySQL
+MySQL --> ScoreRuleService: ScoreRule (scoreChange: -15)
+deactivate MySQL
+deactivate ScoreRuleService
+
+RankingBizService -> LevelRuleService: findByModeAndResult(RANKED, LOSE)
+activate LevelRuleService
+LevelRuleService -> MySQL: SELECT * FROM level_rule
+activate MySQL
+MySQL --> LevelRuleService: LevelRule (expReward: +10)
+deactivate MySQL
+deactivate LevelRuleService
+
+loop for each leaderboard
+  RankingBizService -> RankingBizService: update totalExp (+10)
+  RankingBizService -> RankingBizService: update currentTotalScore (-15)
+  note right
+    Score can go negative
+    but is floored at 0
+  end note
+
+  RankingBizService -> RankingService: update(ranking)
+  activate RankingService
+  RankingService -> MySQL: UPDATE ranking
+  activate MySQL
+  MySQL --> RankingService: success
+  deactivate MySQL
+  deactivate RankingService
+
+  RankingBizService -> ScoreService: save(score record)
+  activate ScoreService
+  ScoreService -> MySQL: INSERT score\n(scoreChange=-15, matchResult='LOSE')
+  activate MySQL
+  MySQL --> ScoreService: success
+  deactivate MySQL
+  deactivate ScoreService
+end
+
+== Build Response ==
+
+RankingBizService -> RankingBizService: build MatchSettlementResponse
+note right
+  Contains rewards for both players:
+  - Winner: exp gained, score change, level up
+  - Loser: exp gained, score change, level up
+end note
+
+RankingBizService --> RankingController: MatchSettlementResponse
+deactivate RankingBizService
+RankingController --> GameSystem: 200 OK\n(winner and loser rewards)
+deactivate RankingController
+
+@enduml

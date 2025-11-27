@@ -1,0 +1,8 @@
+spring:
+  data:
+    mongodb:
+      # Self-hosted MongoDB connection URI
+      # If authentication is required, try: mongodb://admin:<password>@mongo.goodyhao.me:8202?authSource=admin
+      uri: ${GOMOKU_MONGODB_URI}
+      # Default database name
+      database: ${GOMOKU_MONGODB_DATABASE:gomoku}

@@ -1,0 +1,115 @@
+@startuml UC9/UC10/UC11 - Get Top Leaderboards
+
+title UC9/UC10/UC11: Get Top Leaderboards (DAILY, WEEKLY, MONTHLY)
+
+actor Player
+participant RankingController
+participant RankingBizService
+participant LeaderboardService
+participant RankingService
+database MySQL
+
+Player -> RankingController: GET /ranking/leaderboard
+activate RankingController
+RankingController -> RankingBizService: getTopLeaderboards(null)
+activate RankingBizService
+
+note over RankingBizService
+  No userId provided, so only
+  return top 50 players,
+  no user-specific rank info
+end note
+
+== Get DAILY Leaderboard ==
+
+RankingBizService -> LeaderboardService: findByScope(DAILY)
+activate LeaderboardService
+LeaderboardService -> MySQL: SELECT * FROM leaderboard_rule\nWHERE scope='DAILY'
+activate MySQL
+MySQL --> LeaderboardService: DAILY leaderboard config
+deactivate MySQL
+deactivate LeaderboardService
+
+RankingBizService -> RankingService: getTopRankings(dailyLeaderboardId, 50)
+activate RankingService
+RankingService -> MySQL: SELECT r.*, u.nickname, u.avatar_url\nFROM ranking r\nJOIN user u ON r.user_id = u.id\nWHERE r.leaderboard_rule_id=?\nORDER BY r.current_total_score DESC\nLIMIT 50
+activate MySQL
+MySQL --> RankingService: top 50 players\n(rank 1-50)
+deactivate MySQL
+deactivate RankingService
+
+RankingBizService -> RankingBizService: build LeaderboardPageResponse\nfor DAILY
+note right
+  Each entry contains:
+  - rank: 1, 2, 3, ...
+  - userId
+  - nickname
+  - level
+  - score
+end note
+
+== Get WEEKLY Leaderboard ==
+
+RankingBizService -> LeaderboardService: findByScope(WEEKLY)
+activate LeaderboardService
+LeaderboardService -> MySQL: SELECT * FROM leaderboard_rule\nWHERE scope='WEEKLY'
+activate MySQL
+MySQL --> LeaderboardService: WEEKLY leaderboard config
+deactivate MySQL
+deactivate LeaderboardService
+
+RankingBizService -> RankingService: getTopRankings(weeklyLeaderboardId, 50)
+activate RankingService
+RankingService -> MySQL: SELECT r.*, u.nickname, u.avatar_url\nFROM ranking r\nJOIN user u ON r.user_id = u.id\nWHERE r.leaderboard_rule_id=?\nORDER BY r.current_total_score DESC\nLIMIT 50
+activate MySQL
+MySQL --> RankingService: top 50 players
+deactivate MySQL
+deactivate RankingService
+
+RankingBizService -> RankingBizService: build LeaderboardPageResponse\nfor WEEKLY
+
+== Get MONTHLY Leaderboard ==
+
+RankingBizService -> LeaderboardService: findByScope(MONTHLY)
+activate LeaderboardService
+LeaderboardService -> MySQL: SELECT * FROM leaderboard_rule\nWHERE scope='MONTHLY'
+activate MySQL
+MySQL --> LeaderboardService: MONTHLY leaderboard config
+deactivate MySQL
+deactivate LeaderboardService
+
+RankingBizService -> RankingService: getTopRankings(monthlyLeaderboardId, 50)
+activate RankingService
+RankingService -> MySQL: SELECT r.*, u.nickname, u.avatar_url\nFROM ranking r\nJOIN user u ON r.user_id = u.id\nWHERE r.leaderboard_rule_id=?\nORDER BY r.current_total_score DESC\nLIMIT 50
+activate MySQL
+MySQL --> RankingService: top 50 players
+deactivate MySQL
+deactivate RankingService
+
+RankingBizService -> RankingBizService: build LeaderboardPageResponse\nfor MONTHLY
+
+== Build Response ==
+
+RankingBizService -> RankingBizService: build LeaderboardsResponse
+note right
+  Response structure:
+  {
+    daily: { entries: [...50 entries] },
+    weekly: { entries: [...50 entries] },
+    monthly: { entries: [...50 entries] }
+  }
+end note
+
+RankingBizService --> RankingController: LeaderboardsResponse
+deactivate RankingBizService
+RankingController --> Player: 200 OK\n(3 leaderboards with top 50 each)
+deactivate RankingController
+
+note over Player, MySQL
+  **Alternative Flow:**
+  If userId is provided, also include
+  user's rank in each leaderboard
+  even if not in top 50
+end note
+
+@enduml

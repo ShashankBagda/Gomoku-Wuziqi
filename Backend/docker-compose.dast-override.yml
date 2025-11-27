@@ -1,0 +1,10 @@
+services:
+  gomoku-service:
+    ports: []
+  user-service:
+    ports: []
+  ranking-service:
+    ports: []
+  gateway:
+    ports: []
+

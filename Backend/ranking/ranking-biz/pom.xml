@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>com.goody.nus.se.gomoku</groupId>
+    <artifactId>ranking</artifactId>
+    <version>${revision}</version>
+  </parent>
+
+  <artifactId>ranking-biz</artifactId>
+
+  <properties>
+    <maven.compiler.source>17</maven.compiler.source>
+    <maven.compiler.target>17</maven.compiler.target>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+
+  <dependencies>
+
+    <!-- ✅ 引入 ranking-api 模块，才能访问 RankingService 接口与 DTO -->
+    <dependency>
+      <groupId>com.goody.nus.se.gomoku</groupId>
+      <artifactId>ranking-api</artifactId>
+      <version>${revision}</version>
+    </dependency>
+
+    <!-- ✅ 引入 ranking-common（公共枚举、工具类） -->
+    <dependency>
+      <groupId>com.goody.nus.se.gomoku</groupId>
+      <artifactId>ranking-common</artifactId>
+      <version>${revision}</version>
+    </dependency>
+
+    <!-- ✅ 引入 ranking-dao（Mapper 层） -->
+    <dependency>
+      <groupId>com.goody.nus.se.gomoku</groupId>
+      <artifactId>ranking-dao</artifactId>
+      <version>${revision}</version>
+    </dependency>
+
+    <!-- ✅ 支持事务注解 @Transactional -->
+    <dependency>
+      <groupId>org.springframework</groupId>
+      <artifactId>spring-tx</artifactId>
+    </dependency>
+
+    <!-- ✅ 支持 @Resource 注解 -->
+    <dependency>
+      <groupId>jakarta.annotation</groupId>
+      <artifactId>jakarta.annotation-api</artifactId>
+      <version>2.1.1</version>
+    </dependency>
+
+  </dependencies>
+
+  <build>
+    <finalName>${project.artifactId}</finalName>
+    <plugins>
+      <!-- Source code packaging plugin -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-source-plugin</artifactId>
+        <version>3.2.1</version>
+        <configuration>
+          <attach>true</attach>
+        </configuration>
+        <executions>
+          <execution>
+            <phase>compile</phase>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+
+</project>

@@ -1,0 +1,19 @@
+server:
+  servlet:
+    context-path: /api/user
+  port: 8082
+
+spring:
+  application.name: ranking
+  datasource:
+    url: ${RANKING_DB_URL}
+    username: ${RANKING_DB_USERNAME}
+    password: ${RANKING_DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      minimum-idle: 1
+      maximum-pool-size: 2
+# mybatis name rule
+mybatis:
+  configuration:
+    map-underscore-to-camel-case: true

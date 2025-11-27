@@ -1,0 +1,122 @@
+@startuml User Service Sequence Diagrams
+
+'=== UC1: Register Account ===
+group UC1: Register Account
+actor User
+participant Controller
+participant BizService
+participant EmailService
+participant RsaService
+participant PasswordService
+participant UserService
+participant TokenService
+database DB
+
+User -> Controller: GET /public-key
+Controller -> RsaService: publicKey()
+RsaService --> User: RSA public key
+
+User -> Controller: POST /verify/send-email
+Controller -> EmailService: sendVerificationCode(email)
+EmailService --> User: verification code sent
+
+User -> Controller: POST /register\n(email, nickname, encryptedPassword, code)
+Controller -> BizService: register(request)
+
+BizService -> PasswordService: decryptPassword()
+BizService -> EmailService: verifyCode(email, code)
+alt code invalid
+  EmailService --> User: 401 Invalid Code
+end
+
+BizService -> PasswordService: generateSalt()
+BizService -> PasswordService: hashPassword(password, salt)
+BizService -> UserService: save(userDTO)
+UserService -> DB: INSERT user
+BizService -> TokenService: saveOrUpdate(token)
+BizService --> User: 200 OK (userId, token)
+end
+
+newpage
+
+'=== UC2: Login ===
+group UC2: Login
+User -> Controller: POST /login\n(username, encryptedPassword)
+Controller -> BizService: login(request)
+
+BizService -> PasswordService: decryptPassword()
+BizService -> UserService: findByEmail(username)
+UserService -> DB: SELECT user
+BizService -> PasswordService: verifyPassword()
+
+alt password invalid
+  BizService --> User: 401 Unauthorized
+else password valid
+  BizService -> TokenService: saveOrUpdate(token)
+  TokenService -> DB: INSERT/UPDATE user_token
+  BizService --> User: 200 OK (token)
+end
+end
+
+newpage
+
+'=== UC3: Verify Token ===
+group UC3: Verify Token
+User -> Controller: GET /verify\n(Authorization: Bearer token)
+Controller -> BizService: verify(token)
+BizService -> BizService: extractUserId(token)
+BizService -> TokenService: findByUserId()
+TokenService -> DB: SELECT user_token
+BizService -> BizService: verifyToken(token, refreshToken)
+BizService -> UserService: findById(userId)
+UserService -> DB: SELECT user
+BizService --> User: 200 OK (userId, email, valid=true)
+end
+
+newpage
+
+'=== UC4: Reset Password ===
+group UC4: Reset Password
+User -> Controller: POST /verify/send-email
+Controller -> EmailService: sendVerificationCode(email)
+EmailService --> User: code sent
+
+User -> Controller: POST /reset-password\n(email, code, newPassword)
+Controller -> BizService: resetPassword(request)
+BizService -> UserService: findByEmail(email)
+BizService -> EmailService: verifyCode(email, code)
+alt code invalid
+  EmailService --> User: 401 Invalid Code
+end
+BizService -> PasswordService: decryptPassword()
+BizService -> PasswordService: hashPassword()
+BizService -> UserService: update(user)
+UserService -> DB: UPDATE user
+BizService -> TokenService: deleteByUserId()
+TokenService -> DB: DELETE user_token
+BizService --> User: 200 OK
+end
+
+newpage
+
+'=== UC5: Logout ===
+group UC5: Logout
+User -> Controller: POST /logout\n(X-USER-ID: userId)
+Controller -> BizService: logout(userId)
+BizService -> TokenService: deleteByUserId(userId)
+TokenService -> DB: DELETE user_token
+BizService --> User: 200 OK
+end
+
+newpage
+
+'=== UC8: View Profile ===
+group UC8: View Profile
+User -> Controller: GET /user-info\n(X-USER-ID: userId)
+Controller -> BizService: getUserInfo(userId)
+BizService -> UserService: findById(userId)
+UserService -> DB: SELECT user
+BizService --> User: 200 OK (userInfo)
+end
+
+@enduml

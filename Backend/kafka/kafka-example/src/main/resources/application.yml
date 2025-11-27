@@ -1,0 +1,36 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: kafka-example
+  cloud:
+    stream:
+      # Kafka binder configuration
+      kafka:
+        binder:
+          brokers: localhost:9092
+          auto-create-topics: true
+        bindings:
+          gameEndConsumer-in-0:
+            consumer:
+              auto-commit-offset: true
+      # Binding configuration
+      bindings:
+        # Producer binding
+        gameEnd-out-0:
+          destination: game-end-topic
+          content-type: application/json
+        # Consumer binding
+        gameEndConsumer-in-0:
+          destination: game-end-topic
+          group: game-end-consumer-group
+          content-type: application/json
+      # Function definition
+      function:
+        definition: gameEndConsumer
+
+logging:
+  level:
+    com.goody.nus.se.gomoku: INFO
+    org.springframework.cloud.stream: INFO

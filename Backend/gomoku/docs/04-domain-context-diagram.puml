@@ -1,0 +1,104 @@
+@startuml DDD Context Map - Gomoku Game Domain
+
+'Context Map showing bounded contexts and their relationships
+
+skinparam rectangle {
+  BackgroundColor<<core>> LightBlue
+  BackgroundColor<<supporting>> LightGreen
+  BackgroundColor<<generic>> LightGray
+  BackgroundColor<<external>> LightYellow
+  BorderColor Black
+  FontSize 12
+}
+
+package "Gomoku System Context" {
+
+  rectangle "Game Play\nBounded Context" <<core>> as GameContext {
+    rectangle "Game Execution\nSubdomain" as GameExec #LightCyan {
+      card "Execute Game Actions"
+      card "Validate Actions"
+      card "Manage Game State"
+    }
+
+    rectangle "Game Rules\nSubdomain" as GameRules #LightCyan {
+      card "Win Condition Check"
+      card "Board Validation"
+      card "Turn Management"
+    }
+
+    rectangle "Game Lifecycle\nSubdomain" as GameLife #LightCyan {
+      card "Ready Phase"
+      card "Playing Phase"
+      card "Finished Phase"
+    }
+  }
+
+  rectangle "Room Management\nBounded Context" <<core>> as RoomContext {
+    rectangle "Private Room\nSubdomain" as PrivateRoom #LightCyan {
+      card "Create Room"
+      card "Join Room via Code"
+      card "Leave Room"
+    }
+
+    rectangle "Room State\nSubdomain" as RoomState #LightCyan {
+      card "Track Players"
+      card "Room Status"
+    }
+  }
+
+  rectangle "Matchmaking\nBounded Context" <<supporting>> as MatchContext {
+    rectangle "Queue Management\nSubdomain" as QueueMgmt #LightCyan {
+      card "Casual Queue"
+      card "Ranked Queue"
+      card "Match Algorithm"
+    }
+
+    rectangle "Match Result\nSubdomain" as MatchResult #LightCyan {
+      card "Pair Players"
+      card "Create Match Room"
+    }
+  }
+
+  rectangle "Game Persistence\nBounded Context" <<generic>> as PersistenceContext {
+    database "Game State Store\n(MongoDB)" as MongoDB
+    database "Room Records\n(MySQL)" as MySQL
+  }
+
+  rectangle "Player Status\nBounded Context" <<supporting>> as PlayerContext {
+    card "Track Online Status"
+    card "Track In-Game Status"
+    card "Track Queue Status"
+  }
+
+}
+
+package "External Contexts" {
+  rectangle "User Identity\nBounded Context" <<external>> as UserContext {
+    note right
+      User authentication
+      Player profiles
+    end note
+  }
+
+  rectangle "Client Applications\n(Web/Mobile)" <<external>> as ClientApp
+}
+
+' Context relationships
+GameContext --> RoomContext : CF\n[Conformist]\nUses roomId
+RoomContext --> MatchContext : OHS\n[Open Host Service]\nProvides room creation
+MatchContext ..> RoomContext : U/D\n[Upstream/Downstream]\nCreates room when matched
+
+GameContext --> PersistenceContext : OHS\nStores game state
+RoomContext --> PersistenceContext : OHS\nStores room records
+
+GameContext ..> PlayerContext : ACL\nChecks player status
+RoomContext ..> PlayerContext : ACL\nValidates player availability
+MatchContext ..> PlayerContext : ACL\nManages queue status
+
+GameContext ..> UserContext : CF\nDepends on userId
+RoomContext ..> UserContext : CF\nDepends on player identity
+
+ClientApp ..> GameContext : U/D\nConsumes game APIs
+ClientApp ..> RoomContext : U/D\nConsumes room APIs
+ClientApp ..> MatchContext : U/D\nConsumes match APIs
+@enduml

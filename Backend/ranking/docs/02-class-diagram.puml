@@ -1,0 +1,280 @@
+@startuml Ranking Service Class Diagram
+
+package "ranking-controller" {
+  class RankingController {
+    - rankingService: RankingService
+    + getPlayerProfile(userId): ApiResult<PlayerProfileResponse>
+    + settleMatch(request): ApiResult<MatchSettlementResponse>
+    + getRankingRules(): ApiResult<RankingRulesResponse>
+    + getLeaderboard(): ApiResult<LeaderboardsResponse>
+  }
+}
+
+package "ranking-biz" {
+  interface RankingService {
+    + settleMatch(request): MatchSettlementResponse
+    + getPlayerProfile(userId): PlayerProfileResponse
+    + getLeaderboard(scope, page, size, userId): LeaderboardPageResponse
+    + getRankingRules(): RankingRulesResponse
+    + getMatchHistory(userId, modeType, page, size): List<MatchRecordResponse>
+    + getTopLeaderboards(userId): LeaderboardsResponse
+  }
+
+  class RankingBizServiceImpl implements RankingService {
+    - rankingService: IRankingService
+    - scoreService: IScoreService
+    - levelService: ILevelService
+    - scoreRuleService: IScoreRuleService
+    - levelRuleService: ILevelRuleService
+    - leaderboardRuleService: ILeaderboardRuleService
+    --
+    - calculateScoreChange(result, ruleId): int
+    - calculateExpChange(result, modeType): int
+    - updatePlayerLevel(ranking): boolean
+  }
+}
+
+package "ranking-dao" {
+  interface IRankingService {
+    + save(ranking): Long
+    + findByUserId(userId, leaderboardId): RankingDTO
+    + update(ranking): int
+    + getTopRankings(leaderboardId, limit): List<RankingDTO>
+  }
+
+  interface IScoreService {
+    + save(score): Long
+    + findByMatchId(matchId): List<ScoreDTO>
+    + sumByUserId(userId, leaderboardId): Integer
+  }
+
+  interface ILevelService {
+    + findById(levelId): LevelDTO
+    + findByExp(totalExp): LevelDTO
+  }
+
+  interface IScoreRuleService {
+    + findById(ruleId): ScoreRuleDTO
+    + findByModeAndResult(mode, result): ScoreRuleDTO
+  }
+
+  interface ILevelRuleService {
+    + findAll(): List<LevelRuleDTO>
+    + findByLevel(level): LevelRuleDTO
+  }
+
+  interface ILeaderboardRuleService {
+    + findAll(): List<LeaderboardRuleDTO>
+    + findById(id): LeaderboardRuleDTO
+    + findByScope(scope): LeaderboardRuleDTO
+  }
+
+  class RankingMapper {
+    + insert(ranking): int
+    + selectByUserId(userId, leaderboardId): Ranking
+    + updateByPrimaryKey(ranking): int
+    + selectTopByLeaderboard(leaderboardId, limit): List<Ranking>
+  }
+
+  class ScoreMapper {
+    + insert(score): int
+    + selectByMatchId(matchId): List<Score>
+    + selectSumByUserId(userId, leaderboardId): Integer
+  }
+
+  class LevelMapper {
+    + selectByPrimaryKey(id): Level
+    + selectByExpRange(exp): Level
+  }
+
+  class ScoreRuleMapper {
+    + selectByPrimaryKey(id): ScoreRule
+    + selectByModeAndResult(mode, result): ScoreRule
+  }
+
+  class LeaderboardRuleMapper {
+    + selectAll(): List<LeaderboardRule>
+    + selectByPrimaryKey(id): LeaderboardRule
+    + selectByScope(scope): LeaderboardRule
+  }
+}
+
+package "ranking-common" {
+  class Ranking {
+    - id: Long
+    - userId: Long
+    - leaderboardRuleId: Long
+    - totalExp: Integer
+    - levelId: Long
+    - currentTotalScore: Integer
+    - rankPosition: Integer
+  }
+
+  class Score {
+    - id: Long
+    - leaderboardRuleId: Long
+    - userId: Long
+    - matchId: Long
+    - ruleId: Long
+    - scoreChange: Integer
+    - finalScore: Integer
+    - matchResult: String
+  }
+
+  class Level {
+    - id: Long
+    - levelNumber: Integer
+    - levelName: String
+    - requiredExp: Integer
+  }
+
+  class ScoreRule {
+    - id: Long
+    - modeType: String
+    - resultType: String
+    - scoreChange: Integer
+    - description: String
+  }
+
+  class LevelRule {
+    - id: Long
+    - modeType: String
+    - resultType: String
+    - expReward: Integer
+    - description: String
+  }
+
+  class LeaderboardRule {
+    - id: Long
+    - scope: String
+    - displayName: String
+    - resetPeriod: String
+    - isActive: Boolean
+  }
+
+  enum LeaderboardScope {
+    DAILY
+    WEEKLY
+    MONTHLY
+    SEASONAL
+    TOTAL
+  }
+
+  enum MatchResult {
+    WIN
+    LOSE
+    DRAW
+  }
+
+  enum GameMode {
+    RANKED
+    CASUAL
+    PRIVATE
+  }
+}
+
+package "ranking-api" {
+  class MatchSettlementRequest {
+    - matchId: Long
+    - winnerId: Long
+    - loserId: Long
+    - modeType: String
+  }
+
+  class MatchSettlementResponse {
+    - matchId: Long
+    - winnerReward: PlayerReward
+    - loserReward: PlayerReward
+  }
+
+  class PlayerReward {
+    - userId: Long
+    - expGained: Integer
+    - scoreChange: Integer
+    - levelUp: Boolean
+    - newLevel: Integer
+  }
+
+  class PlayerProfileResponse {
+    - userId: Long
+    - level: Integer
+    - totalExp: Integer
+    - expToNextLevel: Integer
+    - winRate: Double
+    - totalGames: Integer
+    - scores: Map<String, Integer>
+    - ranks: List<PlayerRank>
+  }
+
+  class PlayerRank {
+    - scope: String
+    - rank: Integer
+    - totalPlayers: Integer
+    - score: Integer
+  }
+
+  class LeaderboardsResponse {
+    - daily: LeaderboardPageResponse
+    - weekly: LeaderboardPageResponse
+    - monthly: LeaderboardPageResponse
+  }
+
+  class LeaderboardPageResponse {
+    - scope: String
+    - entries: List<LeaderboardEntry>
+    - userRank: LeaderboardEntry
+  }
+
+  class LeaderboardEntry {
+    - rank: Integer
+    - userId: Long
+    - nickname: String
+    - level: Integer
+    - score: Integer
+  }
+
+  class RankingRulesResponse {
+    - scoreRules: List<ScoreRule>
+    - levelRules: List<LevelRule>
+    - levels: List<Level>
+    - leaderboards: List<LeaderboardRule>
+  }
+}
+
+' Relationships
+RankingController --> RankingService
+RankingController ..> MatchSettlementRequest
+RankingController ..> MatchSettlementResponse
+RankingController ..> PlayerProfileResponse
+RankingController ..> LeaderboardsResponse
+
+RankingBizServiceImpl --> IRankingService
+RankingBizServiceImpl --> IScoreService
+RankingBizServiceImpl --> ILevelService
+RankingBizServiceImpl --> IScoreRuleService
+RankingBizServiceImpl --> ILevelRuleService
+RankingBizServiceImpl --> ILeaderboardRuleService
+
+IRankingService --> RankingMapper
+IScoreService --> ScoreMapper
+ILevelService --> LevelMapper
+IScoreRuleService --> ScoreRuleMapper
+ILeaderboardRuleService --> LeaderboardRuleMapper
+
+RankingMapper --> Ranking
+ScoreMapper --> Score
+LevelMapper --> Level
+ScoreRuleMapper --> ScoreRule
+LeaderboardRuleMapper --> LeaderboardRule
+
+Ranking --> Level
+Ranking --> LeaderboardRule
+Score --> ScoreRule
+Score --> LeaderboardRule
+ScoreRule --> GameMode
+ScoreRule --> MatchResult
+LevelRule --> GameMode
+LevelRule --> MatchResult
+LeaderboardRule --> LeaderboardScope
+
+@enduml

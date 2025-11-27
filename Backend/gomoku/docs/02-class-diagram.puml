@@ -1,0 +1,279 @@
+@startuml Gomoku Service Class Diagram
+
+package "gomoku-controller" {
+  class GameController {
+    - gameService: IGameService
+    + executeAction(roomId, playerId, request): ApiResult<GameStateResponse>
+    + getState(roomId, playerId): ApiResult<GameStateResponse>
+  }
+
+  class RoomController {
+    - roomBizService: IRoomBizService
+    + createRoom(playerId): ApiResult<CreateRoomResponse>
+    + joinRoom(request, playerId): ApiResult<JoinRoomResponse>
+    + leaveRoom(request, playerId): ApiResult<LeaveRoomResponse>
+  }
+
+  class MatchController {
+    - matchBizService: IMatchBizService
+    + startMatch(request, playerId): ApiResult<MatchResponse>
+    + cancelMatch(playerId): ApiResult<CancelMatchResponse>
+  }
+
+  class GptAiController {
+    - http: HttpClient
+    - OPENAI_API_KEY: String
+    - OPENAI_BASE: String
+    - OPENAI_MODEL: String
+    + suggestMove(request): ApiResult<AiMove>
+    - findImmediateWin(board, player): AiMove
+    - topCandidates(board, me, k, style): List<ScoredMove>
+    - chooseWithGpt(board, next, candidates): AiMove
+    - scoreMove(board, r, c, player): int
+    - heuristicMove(board, next): AiMove
+  }
+}
+
+package "gomoku-biz" {
+  interface IGameService {
+    + executeAction(roomId, playerId, request): GameStateResponse
+    + getState(roomId, playerId): GameStateResponse
+  }
+
+  class GameServiceImpl implements IGameService {
+    - gameRepository: GameRepository
+    - validateChain: ValidateChain
+    - executeChain: ExecuteChain
+  }
+
+  interface IRoomBizService {
+    + createRoom(playerId): CreateRoomResponse
+    + joinRoom(request, playerId): JoinRoomResponse
+    + leaveRoom(request, playerId): LeaveRoomResponse
+  }
+
+  interface IMatchBizService {
+    + matchAndSave(request, playerId): MatchResponse
+    + cancelMatch(playerId): CancelMatchResponse
+  }
+
+  ' Chain of Responsibility Pattern
+  abstract class ValidateChain {
+    # next: ValidateChain
+    + setNext(chain): ValidateChain
+    + validate(game, action): boolean
+  }
+
+  abstract class ExecuteChain {
+    # next: ExecuteChain
+    + setNext(chain): ExecuteChain
+    + execute(game, action): GameStateSnapshot
+  }
+
+  class TurnValidateChain extends ValidateChain
+  class BoardSizeValidateChain extends ValidateChain
+  class StonePositionValidateChain extends ValidateChain
+
+  class NormalMoveExecuteChain extends ExecuteChain
+  class WinExecuteChain extends ExecuteChain
+  class DrawExecuteChain extends ExecuteChain
+  class SurrenderExecuteChain extends ExecuteChain
+  class ReadyExecuteChain extends ExecuteChain
+}
+
+package "gomoku-matching" {
+  interface IMatchService {
+    + match(playerId, mode): MatchResult
+    + cancelMatch(playerId): boolean
+  }
+
+  class MatchQueue {
+    - casualQueue: Queue<Player>
+    - rankedQueue: Queue<Player>
+    + addPlayer(player, mode): void
+    + removePlayer(playerId): void
+    + tryMatch(): MatchResult
+  }
+}
+
+package "gomoku-room" {
+  interface IRoomService {
+    + createRoom(playerId): RoomCode
+    + joinRoom(roomCode, playerId): RoomInfo
+    + leaveRoom(roomCode, playerId): boolean
+  }
+
+  class RoomCodeService implements IRoomService {
+    - roomRegistry: Map<RoomCode, RoomInfo>
+    + generateRoomCode(): String
+  }
+}
+
+package "gomoku-dao" {
+  interface GameRepository {
+    + save(game): Game
+    + findByRoomId(roomId): Game
+    + deleteByRoomId(roomId): void
+  }
+
+  interface GameRoomMapper {
+    + insert(room): int
+    + selectByRoomId(roomId): GameRoom
+    + update(room): int
+  }
+
+  class Game {
+    - id: String
+    - roomId: Long
+    - player1Id: Long
+    - player2Id: Long
+    - currentState: GameStateSnapshot
+    - actionHistory: List<GameAction>
+    - status: GameStatus
+  }
+
+  class GameRoom {
+    - id: Long
+    - roomCode: String
+    - roomType: RoomTypeEnum
+    - status: RoomStatusEnum
+    - player1Id: Long
+    - player2Id: Long
+  }
+}
+
+package "gomoku-common" {
+  class GameStateSnapshot {
+    - boardSize: Integer
+    - board: int[][]
+    - currentTurn: PlayerColor
+    - winner: Integer
+    - totalMoves: Integer
+    + createEmpty(): GameStateSnapshot
+    + deepCopy(): GameStateSnapshot
+  }
+
+  class GameAction {
+    - type: ActionType
+    - playerId: Long
+    - playerColor: PlayerColor
+    - position: Position
+    - timestamp: Long
+  }
+
+  enum ActionType {
+    READY
+    MOVE
+    SURRENDER
+    DRAW
+    DRAW_AGREE
+    DRAW_DISAGREE
+    UNDO
+    UNDO_AGREE
+    UNDO_DISAGREE
+    RESTART
+    RESTART_AGREE
+    RESTART_DISAGREE
+  }
+
+  enum GameStatus {
+    WAITING
+    PLAYING
+    FINISHED
+  }
+
+  enum PlayerColor {
+    BLACK
+    WHITE
+  }
+}
+
+package "gomoku-api" {
+  class GomokuActionRequest {
+    - type: ActionType
+    - x: Integer
+    - y: Integer
+  }
+
+  class GameStateResponse {
+    - currentState: GameStateSnapshot
+    - lastAction: GameAction
+    - status: GameStatus
+    - player1Ready: Boolean
+    - player2Ready: Boolean
+  }
+
+  class MatchRequest {
+    - mode: String
+  }
+
+  class CreateRoomResponse {
+    - roomId: Long
+    - roomCode: String
+  }
+
+  class AiRequest {
+    - board: int[][]
+    - next: String
+    - k: Integer
+    - style: String
+  }
+
+  class AiMove {
+    - x: int
+    - y: int
+  }
+
+  class ScoredMove {
+    - x: int
+    - y: int
+    - score: int
+    + toMove(): AiMove
+  }
+
+  enum Style {
+    OFFENSE
+    BALANCE
+    DEFENSE
+    - a: int
+    - d: int
+    + combine(sMe, sOpp): int
+    + from(s): Style
+  }
+}
+
+' Relationships
+GameController --> IGameService
+RoomController --> IRoomBizService
+MatchController --> IMatchBizService
+GptAiController ..> AiRequest
+GptAiController ..> AiMove
+GptAiController ..> ScoredMove
+GptAiController ..> Style
+
+GameServiceImpl --> GameRepository
+GameServiceImpl --> ValidateChain
+GameServiceImpl --> ExecuteChain
+GameServiceImpl ..> Game
+GameServiceImpl ..> GameStateSnapshot
+GameServiceImpl ..> GameAction
+
+IRoomBizService --> IRoomService
+IMatchBizService --> IMatchService
+IMatchBizService --> GameRoomMapper
+
+IMatchService --> MatchQueue
+
+GameRepository --> Game
+GameRoomMapper --> GameRoom
+
+Game *-- GameStateSnapshot
+Game *-- GameAction
+GameAction --> ActionType
+GameAction --> PlayerColor
+Game --> GameStatus
+
+GameController ..> GomokuActionRequest
+GameController ..> GameStateResponse
+
+@enduml

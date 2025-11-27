@@ -1,0 +1,22 @@
+package com.goody.nus.se.gomoku.common.valuechecker;
+
+/**
+ * value illegal exception,no suppression and strace
+ *
+ * @author Goody
+ * @version 1.0, 2022/5/6
+ * @since 1.0.0
+ */
+public class ValueIllegalException extends RuntimeException {
+
+    public ValueIllegalException(String message) {
+        super(message, null, true, false);
+    }
+
+    public ValueIllegalException(String message,
+                                 Throwable cause,
+                                 boolean enableSuppression,
+                                 boolean writableStackTrace) {
+        super(message, cause, enableSuppression, writableStackTrace);
+    }
+}

@@ -1,0 +1,42 @@
+@startuml Gomoku Service Sequence Diagrams - Overview
+
+title Gomoku Service - Sequence Diagram Index
+
+note as N1
+**Sequence diagrams have been split into separate files for better readability:**
+
+**Match & Room Management:**
+- 03-01-match-sequence.puml
+  UC4: Start Matching (Casual Mode)
+  Players enter queue and get matched
+
+- 03-02-room-sequence.puml
+  UC1/UC2: Create & Join Private Room
+  Create room code and invite friends
+
+**Game Flow:**
+- 03-03-ready-sequence.puml
+  UC6: Both Players Ready - Game Start
+  Players mark ready, game begins
+
+- 03-04-move-sequence.puml
+  UC7: Place Stone and Win Detection
+  Make move with validation and win check
+
+- 03-05-draw-sequence.puml
+  UC9: Request Draw - Propose and Agree
+  Player proposes draw, opponent agrees/disagrees
+
+- 03-06-surrender-sequence.puml
+  UC8: Player Surrenders
+  Player gives up, opponent wins
+
+**State Query:**
+- 03-07-polling-sequence.puml
+  UC12: Get Game State (Polling)
+  Frontend periodically polls for updates
+
+**Please view individual files for detailed sequence flows.**
+end note
+
+@enduml

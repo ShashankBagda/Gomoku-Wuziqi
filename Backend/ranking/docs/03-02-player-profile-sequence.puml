@@ -1,0 +1,153 @@
+@startuml UC5 - Get Player Profile
+
+title UC5: Get Player Profile
+
+actor Player
+participant RankingController
+participant RankingBizService
+participant RankingService
+participant ScoreService
+participant LevelService
+participant LeaderboardService
+database MySQL
+
+Player -> RankingController: GET /ranking/profile\n(X-User-Id: userId)
+activate RankingController
+RankingController -> RankingBizService: getPlayerProfile(userId)
+activate RankingBizService
+
+== Get Player Rankings from All Leaderboards ==
+
+RankingBizService -> LeaderboardService: findAll()
+activate LeaderboardService
+LeaderboardService -> MySQL: SELECT * FROM leaderboard_rule
+activate MySQL
+MySQL --> LeaderboardService: [DAILY, WEEKLY, MONTHLY, TOTAL]
+deactivate MySQL
+deactivate LeaderboardService
+
+loop for each leaderboard
+  RankingBizService -> RankingService: findByUserId(userId, leaderboardId)
+  activate RankingService
+  RankingService -> MySQL: SELECT * FROM ranking\nWHERE user_id=? AND leaderboard_rule_id=?
+  activate MySQL
+  MySQL --> RankingService: RankingDTO
+  deactivate MySQL
+  deactivate RankingService
+
+  RankingBizService -> ScoreService: sumByUserId(userId, leaderboardId)
+  activate ScoreService
+  ScoreService -> MySQL: SELECT SUM(score_change) FROM score\nWHERE user_id=? AND leaderboard_rule_id=?
+  activate MySQL
+  MySQL --> ScoreService: total score
+  deactivate MySQL
+  deactivate ScoreService
+
+  RankingBizService -> RankingBizService: store score for leaderboard
+  note right
+    Build map of scores:
+    DAILY: 1250
+    WEEKLY: 980
+    MONTHLY: 2340
+    TOTAL: 5678
+  end note
+end
+
+== Get Level Information ==
+
+RankingBizService -> LevelService: findById(currentLevelId)
+activate LevelService
+LevelService -> MySQL: SELECT * FROM level\nWHERE id=?
+activate MySQL
+MySQL --> LevelService: current Level\n(e.g., Level 15, requires 5000 exp)
+deactivate MySQL
+deactivate LevelService
+
+RankingBizService -> LevelService: findByLevel(currentLevel + 1)
+activate LevelService
+LevelService -> MySQL: SELECT * FROM level\nWHERE level_number=?
+activate MySQL
+MySQL --> LevelService: next Level\n(e.g., Level 16, requires 5500 exp)
+deactivate MySQL
+deactivate LevelService
+
+RankingBizService -> RankingBizService: calculate expToNextLevel
+note right
+  expToNextLevel = nextLevel.requiredExp - currentTotalExp
+  Example: 5500 - 5234 = 266 exp needed
+end note
+
+RankingBizService -> RankingBizService: calculate progress percentage
+note right
+  progressPercent = (currentExp - currentLevelExp) /
+                    (nextLevelExp - currentLevelExp) * 100
+  Example: (5234 - 5000) / (5500 - 5000) * 100 = 46.8%
+end note
+
+== Calculate Win Rate ==
+
+RankingBizService -> ScoreService: findByUserId(userId)
+activate ScoreService
+ScoreService -> MySQL: SELECT * FROM score\nWHERE user_id=?
+activate MySQL
+MySQL --> ScoreService: all match scores
+deactivate MySQL
+deactivate ScoreService
+
+RankingBizService -> RankingBizService: count wins/losses/draws
+note right
+  Iterate through scores:
+  - WIN: increment wins
+  - LOSE: increment losses
+  - DRAW: increment draws
+
+  totalGames = wins + losses + draws
+  winRate = wins / totalGames * 100
+end note
+
+== Get Rank Positions ==
+
+loop for each leaderboard
+  RankingBizService -> RankingService: countBetterPlayers(userId, leaderboardId, userScore)
+  activate RankingService
+  RankingService -> MySQL: SELECT COUNT(*) FROM ranking\nWHERE leaderboard_rule_id=?\nAND current_total_score > ?
+  activate MySQL
+  MySQL --> RankingService: players above user
+  deactivate MySQL
+  deactivate RankingService
+
+  RankingBizService -> RankingBizService: rankPosition = count + 1
+  note right
+    If 42 players have higher score,
+    user rank is 43
+  end note
+
+  RankingBizService -> RankingService: countTotalPlayers(leaderboardId)
+  activate RankingService
+  RankingService -> MySQL: SELECT COUNT(*) FROM ranking\nWHERE leaderboard_rule_id=?
+  activate MySQL
+  MySQL --> RankingService: total players
+  deactivate MySQL
+  deactivate RankingService
+
+  RankingBizService -> RankingBizService: build PlayerRank\n(scope, rank, totalPlayers, score)
+end
+
+== Build Response ==
+
+RankingBizService -> RankingBizService: build PlayerProfileResponse
+note right
+  Response contains:
+  - Basic: userId, level, totalExp
+  - Progress: expToNextLevel, progressPercent
+  - Stats: winRate, totalGames
+  - Scores: map of scores per leaderboard
+  - Ranks: list of ranks in all leaderboards
+end note
+
+RankingBizService --> RankingController: PlayerProfileResponse
+deactivate RankingBizService
+RankingController --> Player: 200 OK\n(comprehensive profile)
+deactivate RankingController
+
+@enduml

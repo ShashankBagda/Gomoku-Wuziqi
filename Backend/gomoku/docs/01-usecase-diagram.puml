@@ -1,0 +1,103 @@
+@startuml Gomoku Service Use Case Diagram
+
+left to right direction
+
+actor "Player" as Player
+actor "Match System" as MatchSys
+actor "AI Robot" as AIRobot
+
+rectangle "Gomoku Game System" {
+
+  rectangle "Room Management" {
+    usecase "Create Private Room" as UC1
+    usecase "Join Private Room" as UC2
+    usecase "Leave Room" as UC3
+  }
+
+  rectangle "Matchmaking" {
+    usecase "Start Matching" as UC4
+    usecase "Cancel Matching" as UC5
+  }
+
+  rectangle "AI Practice Mode" {
+    usecase "Play with AI" as UC16
+    usecase "Request AI Move" as UC17
+    usecase "Configure AI Style" as UC18
+  }
+
+  rectangle "Game Play" {
+    usecase "Mark Ready" as UC6
+    usecase "Place Stone (Move)" as UC7
+    usecase "Surrender" as UC8
+    usecase "Request Draw" as UC9
+    usecase "Request Undo" as UC10
+    usecase "Request Restart" as UC11
+    usecase "Get Game State" as UC12
+  }
+
+  rectangle "Game State Management" {
+    usecase "Check Win Condition" as UC13
+    usecase "Validate Move" as UC14
+    usecase "Switch Turn" as UC15
+  }
+}
+
+' Player interactions
+Player --> UC1
+Player --> UC2
+Player --> UC3
+Player --> UC4
+Player --> UC5
+Player --> UC6
+Player --> UC7
+Player --> UC8
+Player --> UC9
+Player --> UC10
+Player --> UC11
+Player --> UC12
+Player --> UC16
+Player --> UC18
+
+' AI Robot interactions
+AIRobot --> UC17
+AIRobot --> UC7
+
+' Include relationships
+UC4 ..> UC1 : <<include>>\ncreate room when matched
+UC6 ..> UC15 : <<include>>\nstart game when both ready
+UC7 ..> UC14 : <<include>>
+UC7 ..> UC13 : <<include>>
+UC7 ..> UC15 : <<include>>
+UC9 ..> UC14 : <<include>>
+UC10 ..> UC14 : <<include>>
+UC16 ..> UC1 : <<include>>\ncreate practice room
+UC16 ..> UC17 : <<include>>\nAI suggests moves
+UC17 ..> UC7 : <<include>>\nexecute AI move
+
+' Extend relationships
+UC8 ..> UC3 : <<extend>>\nauto leave when surrender
+UC13 ..> UC3 : <<extend>>\nauto leave when game ends
+UC18 ..> UC17 : <<extend>>\ncustomize AI behavior
+
+' System actor
+MatchSys ..> UC4 : monitors
+
+note right of "Room Management"
+  Players can create private rooms
+  and invite others by room code,
+  or use matchmaking system
+end note
+
+note right of "AI Practice Mode"
+  GPT-powered AI opponent for practice.
+  Not used in ranked games.
+  Supports OFFENSE, BALANCE, DEFENSE styles.
+end note
+
+note right of "Game Play"
+  Game actions follow
+  Chain of Responsibility pattern
+  with validation and execution chains
+end note
+
+@enduml

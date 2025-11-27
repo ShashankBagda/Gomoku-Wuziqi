@@ -1,0 +1,77 @@
+@startuml UC8 - Surrender
+
+title UC8: Player Surrenders
+
+actor Player1
+participant GameController
+participant GameService
+participant GameRepository
+participant ValidateChain
+participant SurrenderValidateChain
+participant ExecuteChain
+participant SurrenderExecuteChain
+database MongoDB
+
+Player1 -> GameController: POST /game/{roomId}/action\n(type: SURRENDER)
+activate GameController
+GameController -> GameService: executeAction(roomId, player1Id, SURRENDER)
+activate GameService
+
+GameService -> GameRepository: findByRoomId(roomId)
+activate GameRepository
+GameRepository -> MongoDB: FIND game
+activate MongoDB
+MongoDB --> GameRepository: Game document
+deactivate MongoDB
+deactivate GameRepository
+
+GameService -> ValidateChain: validate(game, SURRENDER)
+activate ValidateChain
+ValidateChain -> SurrenderValidateChain: validate()
+activate SurrenderValidateChain
+SurrenderValidateChain -> SurrenderValidateChain: check game is PLAYING or WAITING
+SurrenderValidateChain -> SurrenderValidateChain: check player is in game
+SurrenderValidateChain --> ValidateChain: valid
+deactivate SurrenderValidateChain
+ValidateChain --> GameService: valid
+deactivate ValidateChain
+
+GameService -> ExecuteChain: execute(game, SURRENDER)
+activate ExecuteChain
+ExecuteChain -> SurrenderExecuteChain: execute()
+activate SurrenderExecuteChain
+
+SurrenderExecuteChain -> SurrenderExecuteChain: identify opponent
+note right
+  If player1 (BLACK) surrenders,
+  opponent is player2 (WHITE)
+end note
+
+SurrenderExecuteChain -> SurrenderExecuteChain: set winner = opponent color
+SurrenderExecuteChain -> SurrenderExecuteChain: set status = FINISHED
+SurrenderExecuteChain -> SurrenderExecuteChain: record surrender action
+SurrenderExecuteChain --> ExecuteChain: game finished
+deactivate SurrenderExecuteChain
+ExecuteChain --> GameService: opponent wins
+deactivate ExecuteChain
+
+GameService -> GameRepository: save(game)
+activate GameRepository
+GameRepository -> MongoDB: UPDATE game
+activate MongoDB
+MongoDB --> GameRepository: success
+deactivate MongoDB
+deactivate GameRepository
+
+GameService --> GameController: GameStateResponse
+deactivate GameService
+GameController --> Player1: 200 OK\n(surrendered, opponent wins)
+deactivate GameController
+
+note over Player1, MongoDB
+  Game status is now FINISHED
+  Winner is set to opponent
+  Player1 can leave room or request restart
+end note
+
+@enduml

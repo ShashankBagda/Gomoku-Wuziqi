@@ -1,0 +1,257 @@
+@startuml AI Practice - Domain-Driven Design
+!define RECTANGLE class
+
+skinparam {
+    backgroundColor white
+    shadowing false
+    defaultFontName Arial
+    defaultFontSize 11
+    ranksep 80
+    nodesep 50
+}
+
+skinparam package {
+    BackgroundColor<<bounded-context>> #E3F2FD
+    BackgroundColor<<aggregate>> #FFF3E0
+    BackgroundColor<<value-object>> #E8F5E9
+    BackgroundColor<<service>> #F3E5F5
+    BackgroundColor<<infrastructure>> #FFEBEE
+    BorderColor Black
+    FontStyle bold
+}
+
+skinparam class {
+    BackgroundColor #FFFFFF
+    BorderColor #424242
+    ArrowColor #424242
+}
+
+' ==================== BOUNDED CONTEXTS ====================
+package "AI Practice Bounded Context" <<bounded-context>> {
+
+    ' ==================== AGGREGATES ====================
+    package "Game Aggregate" <<aggregate>> {
+        class GameSession <<Aggregate Root>> {
+            - sessionId: String
+            - board: Board
+            - currentPlayer: Player
+            - aiPlayer: AIPlayer
+            - gameState: GameState
+            - moveHistory: List<Move>
+            --
+            + placeMove(position: Position): MoveResult
+            + requestAiMove(config: AIConfig): AiMove
+            + undo(): void
+            + reset(): void
+            + checkWinner(): Winner
+            --
+            <b>Invariants:</b>
+            • Board must be valid size (15x15)
+            • Players alternate turns
+            • No moves after game over
+        }
+
+        class Board <<Entity>> {
+            - cells: Cell[][]
+            - size: int
+            --
+            + isEmpty(pos: Position): boolean
+            + placeStone(pos: Position, player: PlayerType): void
+            + getCell(pos: Position): Cell
+            + toIntArray(): int[][]
+            --
+            <b>Business Rules:</b>
+            • Cell can only be occupied once
+            • Position must be within bounds
+        }
+
+        class Move <<Entity>> {
+            - moveId: UUID
+            - position: Position
+            - player: PlayerType
+            - timestamp: DateTime
+            --
+            + undo(): void
+        }
+
+        GameSession *-- "1" Board : contains
+        GameSession *-- "*" Move : tracks
+        GameSession o-- "2" Player : involves
+    }
+
+    package "AI Strategy Aggregate" <<aggregate>> {
+        class AIPlayer <<Aggregate Root>> {
+            - playerId: String
+            - strategy: AIStrategy
+            - config: AIConfig
+            --
+            + selectMove(board: Board): AiMove
+            + setStrategy(strategy: AIStrategy): void
+        }
+
+        class AIStrategy <<Entity>> {
+            - strategyType: StrategyType
+            - heuristic: HeuristicEvaluator
+            - gptIntegration: GptService
+            --
+            + evaluate(board: Board): List<ScoredPosition>
+            + selectBestMove(candidates: List<ScoredPosition>): AiMove
+        }
+
+        AIPlayer *-- "1" AIStrategy : uses
+    }
+
+    ' ==================== VALUE OBJECTS ====================
+    package "Value Objects" <<value-object>> {
+        class Position <<Value Object>> {
+            + x: int
+            + y: int
+            --
+            + isValid(): boolean
+            + equals(other: Position): boolean
+        }
+
+        class PlayerType <<Value Object>> {
+            + BLACK
+            + WHITE
+            --
+            + opposite(): PlayerType
+        }
+
+        class Cell <<Value Object>> {
+            + occupant: PlayerType?
+            + isEmpty: boolean
+        }
+
+        class Winner <<Value Object>> {
+            + player: PlayerType?
+            + isDraw: boolean
+            + winningSequence: Position[]
+        }
+
+        class AIConfig <<Value Object>> {
+            + k: int
+            + style: StyleType
+            + timeout: Duration
+            --
+            <b>Constraints:</b>
+            • k: [4..40]
+            • style: OFFENSE|BALANCE|DEFENSE
+        }
+
+        enum StyleType <<Value Object>> {
+            OFFENSE
+            BALANCE
+            DEFENSE
+            --
+            + attackWeight: int
+            + defenseWeight: int
+        }
+
+        AIConfig o-- StyleType
+    }
+
+    ' ==================== DOMAIN SERVICES ====================
+    package "Domain Services" <<service>> {
+        class WinDetectionService <<Domain Service>> {
+            + checkWinner(board: Board): Winner
+            + findWinningSequence(board: Board, player: PlayerType): Position[]
+            - isFiveInRow(board, pos, direction): boolean
+        }
+
+        class HeuristicEvaluator <<Domain Service>> {
+            + scorePosition(board: Board, pos: Position, player: PlayerType): int
+            + topCandidates(board: Board, k: int, style: StyleType): List<ScoredPosition>
+            - patternScore(board, pos, direction): int
+        }
+
+        class MoveValidator <<Domain Service>> {
+            + isLegalMove(board: Board, pos: Position): boolean
+            + findImmediateWin(board: Board, player: PlayerType): Position?
+            + findImmediateBlock(board: Board, player: PlayerType): Position?
+        }
+    }
+
+    ' ==================== APPLICATION SERVICES ====================
+    package "Application Services" <<service>> {
+        class AIPracticeService <<Application Service>> {
+            + startGame(humanColor: PlayerType): GameSession
+            + playHumanMove(sessionId: String, pos: Position): MoveResult
+            + requestAIMove(sessionId: String): AiMove
+            + undoLastMoves(sessionId: String): void
+            + resetGame(sessionId: String): void
+        }
+    }
+
+    ' ==================== INFRASTRUCTURE ====================
+    package "Infrastructure" <<infrastructure>> {
+        interface GptService <<External Service>> {
+            + selectMove(board: int[][], candidates: List<Position>): AiMove
+        }
+
+        class OpenAIAdapter {
+            - apiKey: String
+            - httpClient: HttpClient
+            --
+            + callChatCompletion(prompt: String): String
+        }
+
+        GptService <|.. OpenAIAdapter : implements
+    }
+
+    ' ==================== RELATIONSHIPS ====================
+    GameSession ..> WinDetectionService : uses
+    GameSession ..> MoveValidator : uses
+    AIStrategy ..> HeuristicEvaluator : uses
+    AIStrategy ..> GptService : uses
+    AIStrategy ..> MoveValidator : uses
+
+    AIPracticeService --> GameSession : manages
+    AIPracticeService --> AIPlayer : coordinates with
+
+    Board o-- Cell
+    Move o-- Position
+    Move o-- PlayerType
+}
+
+' ==================== UBIQUITOUS LANGUAGE ====================
+note top of "AI Practice Bounded Context"
+    <b>UBIQUITOUS LANGUAGE</b>
+    • <b>Game Session</b>: A single AI practice game instance
+    • <b>Board</b>: 15x15 grid where stones are placed
+    • <b>Move</b>: Placement of a stone at a position
+    • <b>Position</b>: (x, y) coordinate on the board
+    • <b>AI Player</b>: Computer opponent with configurable strategy
+    • <b>Heuristic</b>: Pattern-based scoring for positions
+    • <b>Candidate</b>: Top-K positions evaluated for AI move
+    • <b>Style</b>: AI playing behavior (Offense/Balance/Defense)
+    • <b>Immediate Win</b>: Move that creates 5 in a row
+    • <b>Immediate Block</b>: Move that prevents opponent win
+end note
+
+' ==================== DDD PATTERNS ====================
+note bottom of GameSession
+    <b>DDD Patterns Applied:</b>
+    • <b>Aggregate Root</b>: Ensures consistency
+    • <b>Entity</b>: Has identity and lifecycle
+    • <b>Value Object</b>: Immutable, defined by attributes
+    • <b>Domain Service</b>: Stateless logic not belonging to entity
+end note
+
+note bottom of AIStrategy
+    <b>Strategy Pattern:</b>
+    Encapsulates AI decision-making algorithms.
+    Allows runtime switching between GPT-assisted
+    and pure heuristic approaches.
+end note
+
+note bottom of HeuristicEvaluator
+    <b>Scoring Algorithm:</b>
+    • 5-in-row: 1,000,000 points
+    • Open-4: 100,000 points
+    • Half-Open-4: 20,000 points
+    • Open-3: 5,000 points
+    • Style modifies attack/defense weighting
+end note
+
+@enduml

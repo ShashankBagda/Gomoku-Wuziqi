@@ -1,0 +1,135 @@
+@startuml DDD Context Map - Ranking & Progression Domain
+
+'Context Map showing bounded contexts and their relationships
+
+skinparam rectangle {
+  BackgroundColor<<core>> LightBlue
+  BackgroundColor<<supporting>> LightGreen
+  BackgroundColor<<generic>> LightGray
+  BackgroundColor<<external>> LightYellow
+  BorderColor Black
+  FontSize 12
+}
+
+package "Ranking System Context" {
+
+  rectangle "Player Progression\nBounded Context" <<core>> as ProgressionContext {
+    rectangle "Experience Management\nSubdomain" as ExpMgmt #LightCyan {
+      card "Award Experience"
+      card "Track Total Exp"
+      card "Level Calculation"
+    }
+
+    rectangle "Level System\nSubdomain" as LevelSys #LightCyan {
+      card "Level Definitions"
+      card "Level Thresholds"
+      card "Level Up Detection"
+    }
+
+    rectangle "Player Profile\nSubdomain" as Profile #LightCyan {
+      card "View Progress"
+      card "Calculate Win Rate"
+      card "Track Statistics"
+    }
+  }
+
+  rectangle "Competitive Ranking\nBounded Context" <<core>> as RankingContext {
+    rectangle "Score Management\nSubdomain" as ScoreMgmt #LightCyan {
+      card "Calculate Score Change"
+      card "Update Player Score"
+      card "Track Score History"
+    }
+
+    rectangle "Leaderboard\nSubdomain" as Leaderboard #LightCyan {
+      card "Rank Players"
+      card "Query Top Players"
+      card "Calculate Positions"
+    }
+
+    rectangle "Periodic Reset\nSubdomain" as PeriodicReset #LightCyan {
+      card "Reset Daily Board"
+      card "Reset Weekly Board"
+      card "Reset Monthly Board"
+      card "Archive History"
+    }
+  }
+
+  rectangle "Match Settlement\nBounded Context" <<core>> as SettlementContext {
+    rectangle "Settlement Processing\nSubdomain" as Settlement #LightCyan {
+      card "Process Match Result"
+      card "Calculate Rewards"
+      card "Distribute Rewards"
+      card "Ensure Idempotency"
+    }
+
+    rectangle "Reward Rules\nSubdomain" as RewardRules #LightCyan {
+      card "Exp Reward Rules"
+      card "Score Reward Rules"
+      card "Mode-based Rules"
+    }
+  }
+
+  rectangle "Rules Configuration\nBounded Context" <<supporting>> as RulesContext {
+    rectangle "Rule Management\nSubdomain" as RuleMgmt #LightCyan {
+      card "Score Rules by Mode"
+      card "Exp Rules by Mode"
+      card "Level Thresholds"
+      card "Leaderboard Configs"
+    }
+  }
+
+  rectangle "Persistence\nBounded Context" <<generic>> as PersistenceContext {
+    database "Ranking Data\n(MySQL)" as RankingDB
+    database "Score History\n(MySQL)" as ScoreDB
+  }
+
+}
+
+package "External Contexts" {
+  rectangle "Game Management\nBounded Context" <<external>> as GameContext {
+    note right
+      Match completion events
+      Match results
+      Game mode information
+    end note
+  }
+
+  rectangle "User Identity\nBounded Context" <<external>> as UserContext {
+    note right
+      User profiles
+      Player nicknames
+      Authentication
+    end note
+  }
+
+  rectangle "Scheduler System\nBounded Context" <<external>> as SchedulerContext {
+    note right
+      Periodic triggers
+      Daily/Weekly/Monthly resets
+    end note
+  }
+
+  rectangle "Client Applications\n(Web/Mobile)" <<external>> as ClientApp
+}
+
+' Context relationships
+SettlementContext --> ProgressionContext : OHS\nUpdates exp and level
+SettlementContext --> RankingContext : OHS\nUpdates score and rank
+SettlementContext --> RulesContext : CF\nFollows reward rules
+
+ProgressionContext --> PersistenceContext : OHS\nStores player data
+RankingContext --> PersistenceContext : OHS\nStores rankings and scores
+
+RankingContext --> PeriodicReset : <<internal>>\nManages reset logic
+
+GameContext --> SettlementContext : U/D\n[Upstream/Downstream]\nTriggers settlement
+
+SchedulerContext --> RankingContext : U/D\nTriggers periodic resets
+
+ProgressionContext ..> UserContext : CF\nDepends on user identity
+RankingContext ..> UserContext : CF\nDepends on user profiles
+
+ClientApp ..> ProgressionContext : U/D\nConsumes profile APIs
+ClientApp ..> RankingContext : U/D\nConsumes leaderboard APIs
+ClientApp ..> RulesContext : U/D\nConsumes rules APIs
+@enduml

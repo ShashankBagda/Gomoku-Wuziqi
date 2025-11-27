@@ -1,0 +1,53 @@
+server:
+  servlet:
+    context-path: /api/gomoku
+  port: 8094
+
+spring:
+  application.name: lobby
+  data:
+    mongodb:
+      # MongoDB Atlas connection URI with TLS enabled
+      # Format: mongodb+srv://<username>:<password>@<cluster-url>/<database>?authSource=admin&replicaSet=<replicaSet>
+      uri: ${GOMOKU_MONGODB_URI}
+      # Default database name
+      database: ${GOMOKU_MONGODB_DATABASE:test_gomoku}
+  datasource:
+    url: ${GOMOKU_DB_URL}
+    username: ${GOMOKU_DB_USERNAME}
+    password: ${GOMOKU_DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      minimum-idle: 10
+      maximum-pool-size: 20
+# mybatis name rule
+mybatis:
+  configuration:
+    map-underscore-to-camel-case: true
+
+# Redisson Configuration Example
+redisson:
+  # Enable Redis (set to false to disable)
+  enabled: true
+
+  # Redis mode: SINGLE, CLUSTER, SENTINEL
+  mode: SINGLE
+  # Redis password (optional)
+  password: ${REDIS_PASSWORD}
+
+  # Connection pool settings
+  connection-pool-size: 5
+  connection-minimum-idle-size: 1
+
+  # Timeout settings (milliseconds)
+  timeout: 3000
+  connect-timeout: 10000
+
+  # Single server configuration
+  single:
+    address: redis://redis.goodyhao.me:8200
+    database: 1
+logging:
+  level:
+    root: info
+    org.mongodb.driver.cluster: warn

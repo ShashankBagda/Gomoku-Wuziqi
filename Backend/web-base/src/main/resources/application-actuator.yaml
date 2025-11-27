@@ -1,0 +1,16 @@
+# Actuator and Prometheus configuration for monitoring
+# This profile can be included in any service that depends on web-base
+# Management endpoints will use the main application port to avoid port conflicts
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    prometheus:
+      enabled: true
+  metrics:
+    tags:
+      # Dynamic application name tag from each service's spring.application.name
+      application: ${spring.application.name}

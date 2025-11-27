@@ -1,0 +1,84 @@
+version: '3.8'
+
+services:
+  # Gomoku Controller Service
+  gomoku-service:
+    image: 152.42.207.145:5000/gomoku-project/gomoku-controller:prod
+    deploy:
+      mode: global
+    environment:
+      JAVA_OPT: "-Dspring.profiles.active=prod"
+      SERVER_PORT: 8090
+      TURN_HOST: ${TURN_HOST:-turn.goodyhao.me:3478}
+      TURN_SECRET: ${TURN_SECRET:-change-me-secret}
+      TURN_TTL: 3600
+      LIVEKIT_URL: ${LIVEKIT_URL:-}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
+    networks:
+      - gomoku-network-prod
+
+  # Match Controller Service
+  match-service:
+    image: 152.42.207.145:5000/gomoku-project/gomoku-controller-match:prod
+    deploy:
+      mode: global
+    environment:
+      JAVA_OPT: "-Dspring.profiles.active=prod"
+      SERVER_PORT: 8094
+    networks:
+      - gomoku-network-prod
+
+  # Room Controller Service
+  room-service:
+    image: 152.42.207.145:5000/gomoku-project/gomoku-controller-room:prod
+    deploy:
+      mode: global
+    environment:
+      JAVA_OPT: "-Dspring.profiles.active=prod"
+      SERVER_PORT: 8095
+    networks:
+      - gomoku-network-prod
+
+  # User Controller Service
+  user-service:
+    image: 152.42.207.145:5000/gomoku-project/user-controller:prod
+    deploy:
+      mode: global
+    environment:
+      JAVA_OPT: "-Dspring.profiles.active=prod"
+      SERVER_PORT: 8091
+    networks:
+      - gomoku-network-prod
+
+  # Ranking Controller Service
+  ranking-service:
+    image: 152.42.207.145:5000/gomoku-project/ranking-controller:prod
+    deploy:
+      mode: global
+    environment:
+      JAVA_OPT: "-Dspring.profiles.active=prod"
+      SERVER_PORT: 8092
+    networks:
+      - gomoku-network-prod
+
+  # Gateway Service
+  gateway:
+    image: 152.42.207.145:5000/gomoku-project/gateway:prod
+    deploy:
+      mode: global
+    ports:
+      - target: 8093
+        published: 8093
+        protocol: tcp
+        mode: host
+    environment:
+      JAVA_OPT: "-Dspring.profiles.active=prod"
+      SERVER_PORT: 8093
+    networks:
+      - gomoku-network-prod
+
+networks:
+  gomoku-network-prod:
+    driver: overlay
+    attachable: true

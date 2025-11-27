@@ -1,0 +1,247 @@
+stages:
+  # Match frontend category structure
+  - quality
+  - test-build-and-push
+  - test-deploy
+  - performance-test
+  - prod-build-and-push
+  - prod-deploy
+
+variables:
+  REGISTRY_URL: 152.42.207.145:5000
+  PROJECT_NAME: gomoku-project
+  TAG_TEST: test
+  TAG_PROD: prod
+
+# ------------------------------
+# 1. Maven Build Stage
+# ------------------------------
+lint:
+  stage: quality
+  script:
+    - "echo '=== Lint: PMD (baseline) — pre-building modules for dependency resolution ==='"
+    - mvn -v
+    - mvn -B -Dmaven.test.skip=true -DskipITs install || echo '⚠ pre-build failed, continuing'
+    - mvn -B -DskipTests=true pmd:pmd || echo '⚠ PMD failed, continuing'
+  artifacts:
+    when: always
+    paths:
+      - "**/target/pmd.xml"
+      - "**/target/site/pmd.html"
+    expire_in: 1 week
+  only:
+    - test
+  allow_failure: true
+
+sca:
+  stage: quality
+  variables:
+    # WARNING: For speed you asked to embed the NVD key here.
+    # Consider moving this to GitLab CI/CD protected variables instead.
+    NVD_API_KEY: "7d724e93-8370-47f0-b3a5-74731fbb6484"
+  script:
+    - "echo '=== SCA: OWASP Dependency-Check ==='"
+    - mvn -v
+    - mvn -B -Dmaven.test.skip=true -DskipITs install || echo '⚠ pre-build failed, continuing'
+    - mvn -B -Dformats=HTML,JSON,XML -DfailOnError=false -Ddependency-check.failBuildOnCVSS=11 org.owasp:dependency-check-maven:aggregate || echo "⚠ dependency-check finished with issues (non-fatal)"
+    - echo "=== Reports found ===" && (find . -maxdepth 3 -name 'dependency-check-report.*' -print || true)
+  cache:
+    key: "depcheck-cache-${CI_COMMIT_REF_SLUG}"
+    paths:
+      - .depcheck/
+  artifacts:
+    when: always
+    paths:
+      - target/dependency-check-report.html
+      - target/dependency-check-report.json
+      - target/dependency-check-report.xml
+      - "**/target/dependency-check-report.html"
+      - "**/target/dependency-check-report.json"
+      - "**/target/dependency-check-report.xml"
+      - "**/dependency-check-report.html"
+      - "**/dependency-check-report.json"
+      - "**/dependency-check-report.xml"
+    expire_in: 1 week
+  only:
+    - test
+  allow_failure: true
+
+sast:
+  stage: quality
+  script:
+    - "echo '=== SAST: SpotBugs ==='"
+    - mvn -v
+    - mvn -B -DskipTests=true com.github.spotbugs:spotbugs-maven-plugin:spotbugs || echo '⚠ SpotBugs found issues, continuing'
+  artifacts:
+    when: always
+    paths:
+      - target/spotbugsXml.xml
+      - target/spotbugs.html
+      - "**/target/spotbugsXml.xml"
+      - "**/target/spotbugs.html"
+    expire_in: 1 week
+  only:
+    - test
+  allow_failure: true
+
+build:
+  stage: test-build-and-push
+  # Shell Runner uses host environment directly (no need for Docker image)
+  script:
+    - echo "CI_REGISTRY=$CI_REGISTRY"
+    - echo "CI_COMMIT_SHORT_SHA=$CI_COMMIT_SHORT_SHA"
+    - echo "=== Checking Environment ==="
+    # Verify JDK 17 installation
+    - java -version
+    # Verify Maven installation
+    - mvn -v
+    - echo "=== Starting Build ==="
+    # Execute full build lifecycle
+    - mvn clean package -Dmaven.test.skip=false
+    # Verify Docker installation
+    - docker compose -f docker-compose-test.yml build --no-cache --push
+  after_script:
+    - du -ch gateway/target/gateway.jar
+    - du -ch user/user-controller/target/user-controller.jar
+    - du -ch ranking/ranking-controller/target/ranking-controller.jar
+    - du -ch gomoku/gomoku-controller/target/gomoku-controller.jar
+    - du -ch gomoku/gomoku-controller-match/target/gomoku-controller-match.jar
+    - du -ch gomoku/gomoku-controller-room/target/gomoku-controller-room.jar
+  only:
+    # Trigger only on test branch changes
+    - test
+
+# ------------------------------
+# 3. Docker Test Stage
+# ------------------------------
+deploy-test:
+  stage: test-deploy
+  # Shell Runner uses host environment directly (no need for Docker image)
+  script:
+    - echo "CI_REGISTRY=$CI_REGISTRY"
+    - echo "CI_COMMIT_SHORT_SHA=$CI_COMMIT_SHORT_SHA"
+    - echo "=== Deploying to Test Environment ==="
+    # Deploy using docker-compose for testing
+    - docker stack deploy -c docker-swarm-deploy-test.yml gomoku-stack-test
+    - sleep 60
+  only:
+    # Trigger only on test branch changes
+    - test
+
+# ------------------------------
+# 4. DAST (OWASP ZAP Baseline)
+# ------------------------------
+dast:
+  stage: quality
+  script:
+    - "echo '=== DAST: Starting app stack (no host ports) ==='"
+    - docker compose -p ci-dast -f docker-compose-dast.yml up -d
+    - "echo '=== Waiting for gateway service on compose network ==='"
+    - |
+      echo '=== Waiting for gateway health (max ~90s) ==='
+      for i in {1..45}; do
+        if docker run --rm --network ci-dast_default curlimages/curl:8.8.0 -m 2 -sSf http://gateway:8083/actuator/health >/dev/null; then echo "Gateway up"; break; fi; sleep 2; done
+    - mkdir -p zap
+    - "echo '=== Running OWASP ZAP baseline scan (inside compose network) ==='"
+    - docker run --rm --network ci-dast_default -v "$PWD/zap:/zap/wrk" owasp/zap2docker-stable zap-baseline.py -t http://gateway:8083 -r zap-report.html -x zap-report.xml -m 5 -a || echo "⚠ ZAP completed with issues (non-fatal)"
+  after_script:
+    - docker compose -p ci-dast -f docker-compose-dast.yml down -v
+  artifacts:
+    when: always
+    paths:
+      - zap/zap-report.html
+      - zap/zap-report.xml
+    expire_in: 1 week
+  only:
+    - test
+  allow_failure: true
+
+build-prod:
+  stage: prod-build-and-push
+  # Shell Runner uses host environment directly (no need for Docker image)
+  script:
+    - echo "CI_REGISTRY=$CI_REGISTRY"
+    - echo "CI_COMMIT_SHORT_SHA=$CI_COMMIT_SHORT_SHA"
+    - echo "=== Checking Environment ==="
+    # Verify JDK 17 installation
+    - java -version
+    # Verify Maven installation
+    - mvn -v
+    - echo "=== Starting Build ==="
+    # Execute full build lifecycle
+    - mvn clean package -Dmaven.test.skip=false
+    # Verify Docker installation
+    - docker compose -f docker-compose-prod.yml build --no-cache --push
+  after_script:
+    - du -ch gateway/target/gateway.jar
+    - du -ch user/user-controller/target/user-controller.jar
+    - du -ch ranking/ranking-controller/target/ranking-controller.jar
+    - du -ch gomoku/gomoku-controller/target/gomoku-controller.jar
+    - du -ch gomoku/gomoku-controller-match/target/gomoku-controller-match.jar
+    - du -ch gomoku/gomoku-controller-room/target/gomoku-controller-room.jar
+  only:
+    # Trigger only on main branch changes
+    - main
+
+deploy-prod:
+  stage: prod-deploy
+  # Shell Runner uses host environment directly (no need for Docker image)
+  script:
+    - echo "CI_REGISTRY=$CI_REGISTRY"
+    - echo "CI_COMMIT_SHORT_SHA=$CI_COMMIT_SHORT_SHA"
+    - echo "=== Deploying to Prod Environment ==="
+    # Deploy using docker-compose for production
+    - docker stack deploy -c docker-swarm-deploy-prod.yml gomoku-stack-prod
+  only:
+    # Trigger only on main branch changes
+    - main
+
+# ------------------------------
+# 5. Performance Testing Stage
+# ------------------------------
+performance-test-phase1:
+  stage: performance-test
+  script:
+    - echo "=== Waiting 60 seconds for services to stabilize ==="
+    - echo "=== Performance Test Phase 1 User Module ==="
+    - cd locust
+    - locust -f phase1_user_module.py --host=https://test-api-gomoku.goodyhao.me --users=100 --spawn-rate=10 --run-time=20s --headless || true
+  only:
+    - test
+  allow_failure: true
+
+performance-test-phase2:
+  stage: performance-test
+  needs:
+    - performance-test-phase1
+  script:
+    - echo "=== Performance Test Phase 2 Matching Room ==="
+    - cd locust
+    - locust -f phase2_matching_room.py --host=https://test-api-gomoku.goodyhao.me --users=200 --spawn-rate=2 --run-time=1m --headless || true
+  only:
+    - test
+  allow_failure: true
+
+performance-test-phase3:
+  stage: performance-test
+  needs:
+    - performance-test-phase2
+  script:
+    - echo "=== Performance Test Phase 3 Full Game ==="
+    - cd locust
+    - locust -f phase3_full_game.py --host=https://test-api-gomoku.goodyhao.me --users=100 --spawn-rate=2 --run-time=1m --headless || true
+  only:
+    - test
+  allow_failure: true
+
+performance-test-phase4:
+  stage: performance-test
+  needs:
+    - performance-test-phase3
+  script:
+    - echo "=== Performance Test Phase 4 Leaderboard ==="
+    - cd locust
+    - locust -f phase4_leaderboard.py --host=https://test-api-gomoku.goodyhao.me --users=500 --spawn-rate=50 --run-time=20s --headless || true
+  only:
+    - test
+  allow_failure: true

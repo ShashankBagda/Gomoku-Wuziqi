@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE generatorConfiguration
+    PUBLIC "-//mybatis.org//DTD MyBatis Generator Configuration 1.0//EN"
+    "https://mybatis.org/dtd/mybatis-generator-config_1_0.dtd">
+
+<generatorConfiguration>
+  <!--classPathEntry:jdbc driver -->
+  <classPathEntry location="${user.home}/.m2/repository/mysql/mysql-connector-java/8.0.28/mysql-connector-java-8.0.28.jar"/>
+
+  <context id="dao" targetRuntime="MyBatis3DynamicSql">
+    <!-- 数据库关键字冲突,自动处理 -->
+    <property name="autoDelimitKeywords" value="true"/>
+    <!-- 用反引号`包裹,默认是双引号" -->
+    <property name="beginningDelimiter" value="`"/>
+    <property name="endingDelimiter" value="`"/>
+    <plugin type="org.mybatis.generator.plugins.SerializablePlugin" />
+    <plugin type="org.mybatis.generator.plugins.EqualsHashCodePlugin" />
+    <plugin type="org.mybatis.generator.plugins.ToStringPlugin" />
+    <plugin type="org.mybatis.generator.plugins.FluentBuilderMethodsPlugin" />
+    <plugin type="com.goody.nus.se.gomoku.common.mybatis.InsertIgnoreIntoPlugin" />
+    <plugin type="com.goody.nus.se.gomoku.common.mybatis.InsertOnDuplicateKeyPlugin" />
+    <plugin type="com.goody.nus.se.gomoku.common.mybatis.ReplaceIntoPlugin" />
+    <plugin type="com.goody.nus.se.gomoku.common.mybatis.DtoGeneratorPlugin"/>
+    <plugin type="com.goody.nus.se.gomoku.common.mybatis.CustomerMapperPlugin"/>
+    <plugin type="com.goody.nus.se.gomoku.common.mybatis.ServiceGeneratorPlugin"/>
+
+    <commentGenerator>
+      <!-- 添加数据库注释到生成的代码 -->
+      <property name="addRemarkComments" value="true" />
+      <!-- 不生成日期 -->
+      <property name="suppressDate" value="true"/>
+    </commentGenerator>
+
+    <!-- ssh -L 3306:localhost:3306 root@206.189.147.173 -N -->
+    <jdbcConnection driverClass="com.mysql.cj.jdbc.Driver"
+                    connectionURL="${GOMOKU_DB_URL}"
+                    userId="${GOMOKU_DB_USERNAME}"
+                    password="${GOMOKU_DB_PASSWORD}">
+      <property name="useSSL" value="false" />
+      <property name="serverTimezone" value="Asia/Hong_Kong" />
+      <!--MySQL 不支持 schema 或者 catalog 所以需要添加这个，作用就是只生成指定数据库的 -->
+      <!--参考 : http://www.mybatis.org/generator/usage/mysql.html -->
+      <property name="nullCatalogMeansCurrent" value="true" />
+    </jdbcConnection>
+
+    <javaTypeResolver >
+      <property name="forceBigDecimals" value="true" />
+      <!-- time field use LocalDate etc -->
+      <property name="useJSR310Types" value="true" />
+    </javaTypeResolver>
+
+    <javaModelGenerator targetPackage="com.goody.nus.se.gomoku.gomoku.model.entity" targetProject="src/main/java">
+      <property name="enableSubPackages" value="true" />
+      <property name="trimStrings" value="true" />
+    </javaModelGenerator>
+
+    <!-- 需要生成XML时才有效 -->
+    <sqlMapGenerator targetPackage="mapper" targetProject="src/main/resources">
+      <property name="enableSubPackages" value="true" />
+    </sqlMapGenerator>
+
+    <javaClientGenerator type="ANNOTATEDMAPPER" targetPackage="com.goody.nus.se.gomoku.gomoku.model.dao" targetProject="src/main/java">
+      <property name="enableSubPackages" value="true" />
+    </javaClientGenerator>
+
+    <table schema="gomoku" tableName="game_room">
+      <property name="useActualColumnNames" value="false"/>
+    </table>
+
+  </context>
+</generatorConfiguration>

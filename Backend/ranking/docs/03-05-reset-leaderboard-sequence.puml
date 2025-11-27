@@ -1,0 +1,126 @@
+@startuml UC17 - Reset Periodic Leaderboards
+
+title UC17: Reset Periodic Leaderboards (Scheduled Task)
+
+actor Scheduler
+participant RankingBizService
+participant RankingService
+participant LeaderboardService
+database MySQL
+
+note over Scheduler
+  Scheduled tasks triggered by cron:
+  - DAILY: Every day at 00:00
+  - WEEKLY: Every Monday at 00:00
+  - MONTHLY: First day of month at 00:00
+end note
+
+Scheduler -> RankingBizService: resetLeaderboard(DAILY)
+activate RankingBizService
+
+== Get Leaderboard Configuration ==
+
+RankingBizService -> LeaderboardService: findByScope(DAILY)
+activate LeaderboardService
+LeaderboardService -> MySQL: SELECT * FROM leaderboard_rule\nWHERE scope='DAILY'
+activate MySQL
+MySQL --> LeaderboardService: DAILY leaderboard config\n(id, scope, reset_period)
+deactivate MySQL
+deactivate LeaderboardService
+
+note over RankingBizService
+  Before resetting, need to:
+  1. Archive old rankings (history)
+  2. Reset current scores to 0
+  3. Recalculate rank positions
+end note
+
+== Archive Old Rankings ==
+
+RankingBizService -> RankingService: archiveRankings(leaderboardId)
+activate RankingService
+RankingService -> MySQL: INSERT INTO ranking_history\nSELECT *, NOW() as archived_at\nFROM ranking\nWHERE leaderboard_rule_id=?
+activate MySQL
+note right
+  Preserve historical data:
+  - Final scores before reset
+  - Final rank positions
+  - Archived timestamp
+  - Period identifier
+end note
+MySQL --> RankingService: rows inserted
+deactivate MySQL
+deactivate RankingService
+
+== Reset Current Scores ==
+
+RankingBizService -> RankingService: resetScores(leaderboardId)
+activate RankingService
+RankingService -> MySQL: UPDATE ranking\nSET current_total_score = 0,\n    rank_position = NULL\nWHERE leaderboard_rule_id=?
+activate MySQL
+note right
+  Reset only leaderboard-specific scores.
+  DO NOT reset:
+  - total_exp (permanent progression)
+  - level_id (permanent level)
+
+  Only reset:
+  - current_total_score (periodic ranking)
+  - rank_position (recalculated later)
+end note
+MySQL --> RankingService: rows updated
+deactivate MySQL
+deactivate RankingService
+
+== Recalculate Rank Positions ==
+
+RankingBizService -> RankingService: recalculateRankPositions(leaderboardId)
+activate RankingService
+RankingService -> MySQL: SELECT user_id, current_total_score\nFROM ranking\nWHERE leaderboard_rule_id=?\nORDER BY current_total_score DESC
+activate MySQL
+MySQL --> RankingService: all rankings sorted
+deactivate MySQL
+
+RankingService -> RankingService: assign rank positions (1, 2, 3, ...)
+note right
+  Since all scores are 0 after reset,
+  all players start at same rank.
+  Will differentiate as new matches settle.
+end note
+
+RankingService -> MySQL: UPDATE ranking\nSET rank_position = ?\nWHERE user_id = ? AND leaderboard_rule_id = ?
+activate MySQL
+note right
+  Update rank for each player
+  in batch or individually
+end note
+MySQL --> RankingService: ranks updated
+deactivate MySQL
+deactivate RankingService
+
+== Notify System ==
+
+RankingBizService -> RankingBizService: log reset completion
+note right
+  Log important info:
+  - Leaderboard scope reset
+  - Number of players affected
+  - Timestamp
+  - Top 3 players from archived period
+end note
+
+RankingBizService --> Scheduler: Reset complete
+deactivate RankingBizService
+
+note over Scheduler, MySQL
+  **Alternative Approach:**
+  Instead of resetting scores to 0,
+  could start new leaderboard period
+  with new leaderboard_rule_id,
+  keeping old period intact.
+
+  Current approach: Reset in-place
+  Benefit: Simpler queries, less data growth
+end note
+
+@enduml

@@ -1,0 +1,116 @@
+@startuml UC7 - Place Stone and Win
+
+title UC7: Place Stone and Win Detection
+
+actor Player1
+participant GameController
+participant GameService
+participant GameRepository
+participant ValidateChain
+participant TurnValidateChain
+participant BoardSizeValidateChain
+participant StonePositionValidateChain
+participant ExecuteChain
+participant NormalMoveExecuteChain
+participant WinExecuteChain
+participant WinConditionChecker
+database MongoDB
+
+Player1 -> GameController: POST /game/{roomId}/action\n(type: MOVE, x: 7, y: 7)
+activate GameController
+GameController -> GameService: executeAction(roomId, player1Id, MOVE)
+activate GameService
+
+GameService -> GameRepository: findByRoomId(roomId)
+activate GameRepository
+GameRepository -> MongoDB: FIND game
+activate MongoDB
+MongoDB --> GameRepository: Game document
+deactivate MongoDB
+deactivate GameRepository
+
+== Validation Chain ==
+
+GameService -> ValidateChain: validate(game, action)
+activate ValidateChain
+
+ValidateChain -> TurnValidateChain: validate()
+activate TurnValidateChain
+TurnValidateChain -> TurnValidateChain: check if player's turn
+TurnValidateChain --> ValidateChain: valid
+deactivate TurnValidateChain
+
+ValidateChain -> BoardSizeValidateChain: validate()
+activate BoardSizeValidateChain
+BoardSizeValidateChain -> BoardSizeValidateChain: check position within board
+BoardSizeValidateChain --> ValidateChain: valid
+deactivate BoardSizeValidateChain
+
+ValidateChain -> StonePositionValidateChain: validate()
+activate StonePositionValidateChain
+StonePositionValidateChain -> StonePositionValidateChain: check position is empty
+StonePositionValidateChain --> ValidateChain: valid
+deactivate StonePositionValidateChain
+
+ValidateChain --> GameService: valid
+deactivate ValidateChain
+
+== Execution Chain ==
+
+GameService -> ExecuteChain: execute(game, action)
+activate ExecuteChain
+
+ExecuteChain -> NormalMoveExecuteChain: execute()
+activate NormalMoveExecuteChain
+NormalMoveExecuteChain -> NormalMoveExecuteChain: place stone on board[x][y]
+NormalMoveExecuteChain -> NormalMoveExecuteChain: increment totalMoves
+
+NormalMoveExecuteChain -> WinExecuteChain: execute()
+activate WinExecuteChain
+WinExecuteChain -> WinConditionChecker: checkWin(board, position, color)
+activate WinConditionChecker
+WinConditionChecker -> WinConditionChecker: check horizontal
+WinConditionChecker -> WinConditionChecker: check vertical
+WinConditionChecker -> WinConditionChecker: check diagonal
+WinConditionChecker -> WinConditionChecker: check anti-diagonal
+
+alt no win detected
+  WinConditionChecker --> WinExecuteChain: no win (null)
+  deactivate WinConditionChecker
+  WinExecuteChain --> NormalMoveExecuteChain: continue
+  deactivate WinExecuteChain
+
+  NormalMoveExecuteChain -> NormalMoveExecuteChain: switch turn\n(BLACK -> WHITE or WHITE -> BLACK)
+  NormalMoveExecuteChain --> ExecuteChain: updated state (normal move)
+  deactivate NormalMoveExecuteChain
+
+else win detected (5 in a row)
+  WinConditionChecker --> WinExecuteChain: win detected
+  deactivate WinConditionChecker
+
+  WinExecuteChain -> WinExecuteChain: set winner = current player color
+  WinExecuteChain -> WinExecuteChain: set status = FINISHED
+  WinExecuteChain --> NormalMoveExecuteChain: game finished
+  deactivate WinExecuteChain
+
+  NormalMoveExecuteChain --> ExecuteChain: game finished (winner set)
+  deactivate NormalMoveExecuteChain
+end
+
+ExecuteChain --> GameService: updated state
+deactivate ExecuteChain
+
+GameService -> GameRepository: save(game)
+activate GameRepository
+GameRepository -> MongoDB: UPDATE game
+activate MongoDB
+MongoDB --> GameRepository: success
+deactivate MongoDB
+deactivate GameRepository
+
+GameService --> GameController: GameStateResponse
+deactivate GameService
+GameController --> Player1: 200 OK (state updated)
+deactivate GameController
+
+@enduml
