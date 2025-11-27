@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  gomoku-frontend:
+    # Image built and pushed by GitLab CI
+    image: 152.42.207.145:5000/gomoku-project/gomoku-frontend:prod
+    deploy:
+      mode: global
+    ports:
+      - target: 80
+        published: 8401
+        protocol: tcp
+        mode: host  # Bind directly to host port, bypassing ingress routing mesh
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

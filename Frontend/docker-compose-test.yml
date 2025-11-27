@@ -1,0 +1,12 @@
+services:
+  # Frontend Service
+  gomoku-frontend:
+    image: 152.42.207.145:5000/gomoku-project/gomoku-frontend:test
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gomoku-frontend
+    ports:
+      - "8301:80"
+    environment:
+      - NODE_ENV=test

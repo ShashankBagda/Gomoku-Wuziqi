@@ -1,0 +1,22 @@
+{
+  "short_name": "Gomoku",
+  "name": "Gomoku Multiplayer Game",
+  "icons": [
+    {
+      "src": "icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#F1F1F1",
+  "theme_color": "#003D7C",
+  "orientation": "portrait-primary",
+  "description": "Play Gomoku online or offline, with multiplayer support and beautiful NUS theme."
+}

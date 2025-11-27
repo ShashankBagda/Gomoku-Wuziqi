@@ -1,0 +1,19 @@
+{
+  "extends": ["plugin:security/recommended-legacy"],
+  "plugins": ["security"],
+  "parserOptions": {
+    "ecmaVersion": 2020,
+    "sourceType": "module",
+    "ecmaFeatures": {
+      "jsx": true
+    }
+  },
+  "env": {
+    "browser": true,
+    "es6": true
+  },
+  "rules": {
+    "security/detect-object-injection": "off",
+    "security/detect-unsafe-regex": "off"
+  }
+}

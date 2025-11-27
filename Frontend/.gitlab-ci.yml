@@ -1,0 +1,220 @@
+stages:
+  - quality
+  - test-build-and-push
+  - test-deploy
+  - prod-build-and-push
+  - prod-deploy
+
+variables:
+  # Docker image configuration
+  DOCKER_REGISTRY: "152.42.207.145:5000"  # Image registry address
+  IMAGE_NAME: "gomoku-project/gomoku-frontend"
+
+  # Swarm configuration
+  STACK_NAME: "gomoku-frontend-stack"  # Docker Swarm stack name
+
+# Stage 0: Quality gates
+unit-tests:
+  stage: quality
+  image: node:18
+  script:
+    - npm ci || echo "⚠ npm ci failed, continuing"
+    - npm run ci:test:coverage:soft
+  allow_failure: true
+  only:
+    - test
+
+lint:
+  stage: quality
+  image: node:18
+  script:
+    - npm ci || echo "⚠ npm ci failed, continuing"
+    - npm run ci:lint:soft
+  allow_failure: true
+  only:
+    - test
+
+sca:
+  stage: quality
+  image: node:18
+  script:
+    - npm ci || echo "⚠ npm ci failed, continuing"
+    - npm run ci:sca:soft
+  allow_failure: true
+  only:
+    - test
+
+sast:
+  stage: quality
+  image: node:18
+  script:
+    - npm ci || echo "⚠ npm ci failed, continuing"
+    - npm run ci:sast:soft
+  allow_failure: true
+  only:
+    - test
+
+# Stage: DAST security testing with OWASP ZAP
+dast:
+  stage: quality
+  script:
+    - echo "Running OWASP ZAP baseline scan against test environment"
+    - mkdir -p security && chmod 777 security || true
+    - |
+      echo "Logging into Docker Hub to pull ZAP image"
+      if [ -n "$DOCKERHUB_USERNAME" ] && [ -n "$DOCKERHUB_TOKEN" ]; then
+        echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin || true
+      fi
+    - npm run ci:dast:soft -- "https://test-gomoku.goodyhao.me"
+  artifacts:
+    when: always
+    expire_in: 1 week
+    paths:
+      - security/zap-baseline-report.html
+  only:
+    - test
+  allow_failure: true
+
+# Stage 1: Build frontend and package as Docker image
+build-and-push:
+  stage: test-build-and-push
+  script:
+    # 1. Build frontend
+    - echo "========================================="
+    - echo "Step 1/4:Build frontend application"
+    - echo "========================================="
+    - export REACT_APP_USE_LIVEKIT=true
+    - npm install
+    - CI=false npm run build:test
+    - echo "✓ Frontend build complete, static files in build/ directory"
+
+    # 2. Build Docker image
+    - echo ""
+    - echo "========================================="
+    - echo "Step 2/4:Build Docker image"
+    - echo "========================================="
+    - CI=true docker build -t ${IMAGE_NAME}:test .
+    - echo "✓ Docker image build complete"
+
+    # 3. Tag image
+    - echo ""
+    - echo "========================================="
+    - echo "Step 3/4:Tag image"
+    - echo "========================================="
+    - docker tag ${IMAGE_NAME}:test ${DOCKER_REGISTRY}/${IMAGE_NAME}:test
+    - echo "✓ Image tagging complete"
+
+    # 4. Push image to registry
+    - echo ""
+    - echo "========================================="
+    - echo "Step 4/4:Push image to registry"
+    - echo "========================================="
+    - docker push ${DOCKER_REGISTRY}/${IMAGE_NAME}:test
+    - echo "✓ Image push complete:${DOCKER_REGISTRY}/${IMAGE_NAME}:test"
+  after_script:
+    # Clean up local images to save space (optional)
+    - docker image prune -f
+  only:
+    - test
+
+# Stage 2: Deploy to Docker Swarm
+deploy-swarm:
+  stage: test-deploy
+  script:
+    - echo "Deploying to Docker Swarm cluster..."
+
+    # Deploy or update Stack
+    - VERSION=test docker stack deploy -c docker-swarm-test.yml ${STACK_NAME}
+
+    # Wait for service to reach Running (faster than fixed sleep)
+    - |
+      echo "Waiting for ${STACK_NAME}_gomoku-frontend to reach Running..."
+      for i in {1..30}; do
+        state=$(docker service ps ${STACK_NAME}_gomoku-frontend --format '{{.CurrentState}}' | head -n1 || true)
+        echo "Attempt ${i}: state=${state}"
+        if echo "$state" | grep -q "Running"; then
+          echo "Service is Running"; break; fi
+        sleep 2
+      done
+
+    # Check service status
+    - echo ""
+    - echo "========================================="
+    - echo "Service Deployment Status"
+    - echo "========================================="
+    - docker stack services ${STACK_NAME}
+    - docker service ps ${STACK_NAME}_gomoku-frontend
+
+    - echo ""
+    - echo "✓ Deployment complete!"
+  environment:
+    name: test
+    url: https://test-gomoku.goodyhao.me
+  only:
+    - test
+
+# Stage 1: Build frontend and package as Docker image
+build-and-push-prod:
+  stage: prod-build-and-push
+  script:
+    # 1. Build frontend
+    - echo "========================================="
+    - echo "Step 1/4:Build frontend application"
+    - echo "========================================="
+    - export REACT_APP_USE_LIVEKIT=true
+    - npm install
+    - CI=false npm run build:prod
+    - echo "✓ Frontend build complete, static files in build/ directory"
+
+    # 2. Build Docker image
+    - echo ""
+    - echo "========================================="
+    - echo "Step 2/4:Build Docker image"
+    - echo "========================================="
+    - CI=true docker build -t ${IMAGE_NAME}:prod .
+    - echo "✓ Docker image build complete"
+
+    # 3. Tag image
+    - echo ""
+    - echo "========================================="
+    - echo "Step 3/4:Tag image"
+    - echo "========================================="
+    - docker tag ${IMAGE_NAME}:prod ${DOCKER_REGISTRY}/${IMAGE_NAME}:prod
+    - echo "✓ Image tagging complete"
+
+    # 4. Push image to registry
+    - echo ""
+    - echo "========================================="
+    - echo "Step 4/4:Push image to registry"
+    - echo "========================================="
+    - docker push ${DOCKER_REGISTRY}/${IMAGE_NAME}:prod
+    - echo "✓ Image push complete:${DOCKER_REGISTRY}/${IMAGE_NAME}:test"
+  after_script:
+    # Clean up local images to save space (optional)
+    - docker image prune -f
+  only:
+    - main
+
+deploy-swarm-prod:
+  stage: prod-deploy
+  script:
+    - echo "Deploying to Docker Swarm cluster..."
+
+    # Deploy or update Stack
+    - docker stack deploy -c docker-swarm-prod.yml gomoku-frontend-stack-prod
+
+    # Check service status
+    - echo ""
+    - echo "========================================="
+    - echo "Service Deployment Status"
+    - echo "========================================="
+    - docker stack services ${STACK_NAME}
+    - docker service ps ${STACK_NAME}_gomoku-frontend
+
+    - echo ""
+    - echo "✓ Deployment complete!"
+  environment:
+    name: prod
+    url: https://gomoku.goodyhao.me
+  only:
+    - main
